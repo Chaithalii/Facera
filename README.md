@@ -6,6 +6,8 @@ Supports face enrollment, similarity-based identification, unknown rejection,
 full evaluation reporting, live webcam capture & enrollment, and database management — all running efficiently on a standard CPU.
 
 public url : https://facera.onrender.com/
+
+
 backend : python api.py
 
 ---
