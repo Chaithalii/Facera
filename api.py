@@ -351,7 +351,16 @@ def delete_person(name: str):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-#  Entry Point
+#  Module-level Startup  (runs under BOTH `python api.py` AND gunicorn api:app)
+# ──────────────────────────────────────────────────────────────────────────────
+# Gunicorn imports this module directly and never executes __main__, so we MUST
+# seed the database here, at module level, after all functions are defined.
+refresh_database()
+log.info("Module startup: %d person(s) loaded into database.", len(_database))
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  Entry Point  (only when running directly: `python api.py`)
 # ──────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -362,9 +371,10 @@ if __name__ == "__main__":
     log.info("=" * 60)
     log.info("Loading model on startup (first run downloads ~300 MB)…")
     get_model()
-    refresh_database()
+    # refresh_database() already called at module level above
     log.info("Enrolled persons: %d", len(_database))
     log.info("Server starting at http://127.0.0.1:%d", port)
     log.info("Open http://127.0.0.1:%d/ in your browser.", port)
     log.info("=" * 60)
     app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
+
