@@ -1,0 +1,3964 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Facera — Face Recognition Identification System</title>
+  <meta name="description" content="A systems-level face recognition engine. Enrollment, embedding, similarity matching, and unknown rejection — built with ArcFace and ONNX Runtime." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Manrope:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ─────────────────────────────────────────────────────────
+       RESET & TOKENS
+    ───────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; font-size: 16px; }
+
+    :root {
+      --cream:     #F0EBE3;
+      --cream-alt: #E7E1D8;
+      --ink:       #1A1510;
+      --ink-60:    #7A6E66;
+      --ink-30:    #B5AEA7;
+      --accent:    #B03A24;
+      --known:     #2D6040;
+      --border:    #D1CCC4;
+      --code-bg:   #DDD7CE;
+      --white:     #FAF8F4;
+      --step-num:  #EAE4DA;
+
+      --serif: 'DM Serif Display', Georgia, serif;
+      --sans:  'Manrope', system-ui, sans-serif;
+      --mono:  'JetBrains Mono', 'Courier New', monospace;
+    }
+
+    body {
+      font-family: var(--sans);
+      background: var(--cream);
+      color: var(--ink);
+      line-height: 1.65;
+      overflow-x: hidden;
+    }
+
+    ::selection { background: var(--accent); color: var(--white); }
+
+    /* ─────────────────────────────────────────────────────────
+       TYPOGRAPHY
+    ───────────────────────────────────────────────────────── */
+    .serif { font-family: var(--serif); }
+    .mono  { font-family: var(--mono); }
+
+    h1 {
+      font-family: var(--serif);
+      font-size: clamp(3.6rem, 8vw, 7.5rem);
+      line-height: 0.95;
+      letter-spacing: -0.02em;
+    }
+    h2 {
+      font-family: var(--serif);
+      font-size: clamp(2.2rem, 4.5vw, 3.8rem);
+      line-height: 1.05;
+      letter-spacing: -0.015em;
+    }
+    h3 {
+      font-family: var(--serif);
+      font-size: clamp(1.4rem, 2.5vw, 2rem);
+      line-height: 1.2;
+    }
+
+    p { line-height: 1.72; }
+
+    .eyebrow {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-60);
+      border: 1px solid var(--border);
+      padding: 0.3em 0.8em;
+      border-radius: 2px;
+    }
+
+    .label {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-60);
+    }
+
+    /* ─────────────────────────────────────────────────────────
+       LAYOUT
+    ───────────────────────────────────────────────────────── */
+    .container {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 0 2.5rem;
+    }
+
+    section { padding: 7rem 0; }
+    section.alt { background: var(--cream-alt); }
+
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+    }
+
+    /* ─────────────────────────────────────────────────────────
+       NAV
+    ───────────────────────────────────────────────────────── */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      background: var(--cream);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2.5rem;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: box-shadow 0.3s;
+    }
+    nav.scrolled { box-shadow: 0 2px 24px rgba(26,21,16,0.08); }
+
+    .nav-brand {
+      font-family: var(--serif);
+      font-size: 1.35rem;
+      letter-spacing: -0.02em;
+    }
+    .nav-brand span { color: var(--accent); }
+
+    .nav-links {
+      display: flex;
+      gap: 2.2rem;
+      list-style: none;
+    }
+    .nav-links a {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--ink-60);
+      text-decoration: none;
+      letter-spacing: 0.01em;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--ink); }
+
+    .nav-cta {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+      text-decoration: none;
+      border: 1px solid var(--accent);
+      padding: 0.45em 1.1em;
+      transition: background 0.2s, color 0.2s;
+    }
+    .nav-cta:hover { background: var(--accent); color: var(--white); }
+
+    /* ─────────────────────────────────────────────────────────
+       HERO
+    ───────────────────────────────────────────────────────── */
+    #hero {
+      padding-top: 8rem;
+      padding-bottom: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4rem;
+      align-items: center;
+    }
+
+    .hero-text {
+      padding: 4rem 0 4rem;
+    }
+    .hero-text .eyebrow { margin-bottom: 2rem; }
+    .hero-text h1 { margin-bottom: 1.8rem; }
+    .hero-text h1 em {
+      font-style: italic;
+      color: var(--ink-60);
+    }
+
+    .hero-tagline {
+      font-size: 1.1rem;
+      color: var(--ink-60);
+      max-width: 440px;
+      margin-bottom: 2.5rem;
+      font-weight: 400;
+    }
+
+    .hero-meta {
+      display: flex;
+      gap: 2rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .hero-meta a {
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      letter-spacing: 0.04em;
+      color: var(--ink);
+      text-decoration: none;
+      border-bottom: 1px solid var(--ink);
+      padding-bottom: 1px;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .hero-meta a:hover { color: var(--accent); border-color: var(--accent); }
+    .hero-meta .sep { color: var(--ink-30); }
+
+    .hero-visual {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 3rem 0;
+    }
+
+    /* ─── Face SVG ─── */
+    .face-wrap {
+      position: relative;
+      width: 100%;
+      max-width: 440px;
+    }
+
+    .face-svg {
+      width: 100%;
+      height: auto;
+    }
+
+    @keyframes bbox-dash {
+      from { stroke-dashoffset: 0; }
+      to   { stroke-dashoffset: -60; }
+    }
+    @keyframes landmark-pulse {
+      0%, 100% { r: 4; opacity: 1; }
+      50%       { r: 6; opacity: 0.7; }
+    }
+    @keyframes scan-line {
+      0%   { transform: translateY(0); opacity: 0.6; }
+      100% { transform: translateY(320px); opacity: 0; }
+    }
+    @keyframes embed-shimmer {
+      0%   { opacity: 0.4; }
+      50%  { opacity: 1; }
+      100% { opacity: 0.4; }
+    }
+
+    .bbox-anim {
+      animation: bbox-dash 3s linear infinite;
+    }
+    .lm { animation: landmark-pulse 2s ease-in-out infinite; }
+    .lm:nth-child(2) { animation-delay: 0.4s; }
+    .lm:nth-child(3) { animation-delay: 0.8s; }
+    .lm:nth-child(4) { animation-delay: 1.2s; }
+    .lm:nth-child(5) { animation-delay: 1.6s; }
+
+    .scan-line-anim {
+      animation: scan-line 2.8s linear infinite;
+    }
+
+    .embed-bar {
+      animation: embed-shimmer 2s ease-in-out infinite;
+    }
+
+    /* ─────────────────────────────────────────────────────────
+       MARQUEE
+    ───────────────────────────────────────────────────────── */
+    .marquee-wrap {
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 0;
+      overflow: hidden;
+      background: var(--white);
+    }
+    .marquee-track {
+      display: flex;
+      gap: 0;
+      animation: marquee 28s linear infinite;
+      white-space: nowrap;
+    }
+    .marquee-track span {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      color: var(--ink-60);
+      padding: 0 2.5rem;
+    }
+    .marquee-track span.accent { color: var(--accent); }
+    @keyframes marquee {
+      from { transform: translateX(0); }
+      to   { transform: translateX(-50%); }
+    }
+
+    /* ─────────────────────────────────────────────────────────
+       INTRO
+    ───────────────────────────────────────────────────────── */
+    #intro { padding: 6rem 0; }
+    .intro-grid {
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      gap: 4rem;
+      align-items: start;
+    }
+    .intro-label {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-60);
+      padding-top: 0.4rem;
+      border-top: 1px solid var(--border);
+    }
+    .intro-body {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3rem;
+    }
+    .intro-body p {
+      font-size: 1.05rem;
+      color: var(--ink-60);
+    }
+    .intro-body p strong { color: var(--ink); font-weight: 600; }
+    .intro-body .large-quote {
+      font-family: var(--serif);
+      font-size: 1.5rem;
+      line-height: 1.4;
+      color: var(--ink);
+      grid-column: 1 / -1;
+      border-left: 3px solid var(--accent);
+      padding-left: 1.5rem;
+    }
+
+    /* ─────────────────────────────────────────────────────────
+       PIPELINE
+    ───────────────────────────────────────────────────────── */
+    #pipeline { padding: 6rem 0; }
+
+    .pipeline-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 5rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 2rem;
+    }
+    .pipeline-header .label { margin-left: auto; }
+
+    .pipeline-steps {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+    }
+    .step {
+      padding: 2.5rem 2rem 2.5rem 0;
+      border-right: 1px solid var(--border);
+      position: relative;
+    }
+    .step:last-child { border-right: none; padding-right: 0; }
+    .step:not(:first-child) { padding-left: 2rem; }
+
+    .step-num {
+      font-family: var(--serif);
+      font-size: 5rem;
+      line-height: 1;
+      color: var(--step-num);
+      position: absolute;
+      top: 1.5rem;
+      right: 2rem;
+      user-select: none;
+    }
+    .step:last-child .step-num { right: 0; }
+
+    .step-tag {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 1rem;
+    }
+    .step h3 {
+      font-family: var(--serif);
+      font-size: 1.6rem;
+      margin-bottom: 1rem;
+    }
+    .step p {
+      font-size: 0.9rem;
+      color: var(--ink-60);
+      line-height: 1.6;
+      margin-bottom: 1.5rem;
+    }
+
+    .step-tech {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+    }
+    .step-tech span {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--ink-60);
+      background: var(--code-bg);
+      display: inline-block;
+      padding: 0.25em 0.6em;
+      border-radius: 2px;
+      align-self: flex-start;
+    }
+
+    /* ─────────────────────────────────────────────────────────
+       DEMO SECTION
+    ───────────────────────────────────────────────────────── */
+    #demo { padding: 7rem 0; }
+
+    .demo-header { margin-bottom: 4rem; }
+    .demo-header h2 { margin-bottom: 0.5rem; }
+    .demo-header p { color: var(--ink-60); max-width: 480px; }
+
+    .demo-layout {
+      display: grid;
+      grid-template-columns: 1fr 1.6fr;
+      gap: 4rem;
+      align-items: start;
+    }
+
+    /* Left panel: scenario + query face */
+    .demo-left {}
+
+    .scenario-label {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink-60);
+      margin-bottom: 0.8rem;
+    }
+    .scenario-btns {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      margin-bottom: 2.5rem;
+    }
+    .scenario-btn {
+      background: none;
+      border: 1px solid var(--border);
+      padding: 0.85rem 1.2rem;
+      text-align: left;
+      cursor: pointer;
+      font-family: var(--sans);
+      font-size: 0.88rem;
+      font-weight: 500;
+      color: var(--ink-60);
+      transition: all 0.2s;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .scenario-btn:hover { border-color: var(--ink); color: var(--ink); }
+    .scenario-btn.active {
+      border-color: var(--ink);
+      background: var(--ink);
+      color: var(--white);
+    }
+    .scenario-btn .score-hint {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      opacity: 0.6;
+    }
+
+    .query-face-box {
+      border: 1px solid var(--border);
+      background: var(--white);
+      padding: 2rem;
+      aspect-ratio: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.8rem;
+      max-width: 220px;
+    }
+    .query-face-icon {
+      width: 80px;
+      height: 80px;
+    }
+    .query-label {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--ink-60);
+    }
+    .query-score-display {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: var(--ink-30);
+    }
+
+    /* Right panel: bars + result */
+    .demo-right {}
+
+    .threshold-control {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+      padding: 1.2rem;
+      background: var(--white);
+      border: 1px solid var(--border);
+    }
+    .threshold-control label {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--ink-60);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .threshold-control input[type="range"] {
+      flex: 1;
+      accent-color: var(--ink);
+      cursor: pointer;
+    }
+    .threshold-value {
+      font-family: var(--mono);
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--accent);
+      min-width: 3.5rem;
+      text-align: right;
+    }
+
+    .persons-list { margin-bottom: 2.5rem; }
+
+    .person-row {
+      display: grid;
+      grid-template-columns: 90px 1fr 56px;
+      gap: 0.8rem;
+      align-items: center;
+      padding: 0.8rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .person-name {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--ink);
+    }
+
+    .sim-bar-wrap {
+      height: 8px;
+      background: var(--step-num);
+      border-radius: 0;
+      overflow: hidden;
+    }
+    .sim-bar {
+      height: 100%;
+      background: var(--ink-30);
+      width: 0%;
+      transition: width 0.55s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s;
+      border-radius: 0;
+    }
+    .sim-bar.above-threshold { background: var(--known); }
+    .sim-bar.top-score { background: var(--accent); }
+
+    .sim-score-val {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--ink-60);
+      text-align: right;
+    }
+
+    .demo-result {
+      border: 1px solid var(--border);
+      padding: 2rem;
+      background: var(--white);
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .demo-result .result-label {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.1em;
+      color: var(--ink-60);
+      text-transform: uppercase;
+    }
+    .demo-result .result-name {
+      font-family: var(--serif);
+      font-size: 2.2rem;
+      line-height: 1;
+      color: var(--ink);
+      transition: color 0.3s;
+    }
+    .demo-result .result-name.unknown { color: var(--accent); font-style: italic; }
+    .demo-result .result-name.known   { color: var(--known); }
+    .demo-result .result-meta {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--ink-60);
+      margin-top: 0.3rem;
+    }
+    .result-verdict {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.3em 0.8em;
+      margin-top: 0.5rem;
+      align-self: flex-start;
+    }
+    .result-verdict.identified {
+      background: rgba(45, 96, 64, 0.12);
+      color: var(--known);
+      border: 1px solid rgba(45, 96, 64, 0.3);
+    }
+    .result-verdict.rejected {
+      background: rgba(176, 58, 36, 0.1);
+      color: var(--accent);
+      border: 1px solid rgba(176, 58, 36, 0.3);
+    }
+
+    /* ─────────────────────────────────────────────────────────
+       ENROLLMENT
+    ───────────────────────────────────────────────────────── */
+    #enrollment { padding: 7rem 0; }
+
+    .enroll-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5rem;
+      align-items: start;
+    }
+    .enroll-left h2 { margin-bottom: 1.5rem; }
+    .enroll-left p {
+      color: var(--ink-60);
+      margin-bottom: 1.5rem;
+      font-size: 1.02rem;
+    }
+
+    .enroll-detail {
+      border-top: 1px solid var(--border);
+      padding-top: 1.5rem;
+      margin-top: 1.5rem;
+    }
+    .enroll-detail h4 {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink-60);
+      margin-bottom: 0.8rem;
+    }
+    .enroll-detail p {
+      font-size: 0.9rem;
+      color: var(--ink-60);
+      margin-bottom: 0;
+    }
+
+    .enroll-right {}
+
+    .file-tree {
+      background: var(--white);
+      border: 1px solid var(--border);
+      padding: 1.5rem;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      line-height: 2;
+      margin-bottom: 1.5rem;
+    }
+    .file-tree .dir  { color: var(--ink); font-weight: 500; }
+    .file-tree .file { color: var(--ink-60); }
+    .file-tree .note { color: var(--accent); font-size: 0.7rem; }
+    .file-tree .indent1 { padding-left: 1.2em; }
+    .file-tree .indent2 { padding-left: 2.4em; }
+    .file-tree .indent3 { padding-left: 3.6em; }
+
+    .code-block {
+      background: var(--ink);
+      color: var(--cream);
+      padding: 1.2rem 1.5rem;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      line-height: 1.8;
+      border-radius: 0;
+    }
+    .code-block .prompt { color: var(--ink-60); user-select: none; }
+    .code-block .cmd   { color: #C9B97A; }
+    .code-block .flag  { color: #88A47A; }
+    .code-block .val   { color: #A07CC5; }
+    .code-block .cmt   { color: #6E6258; font-style: italic; }
+
+    .enroll-tips {
+      margin-top: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+    .tip {
+      font-size: 0.85rem;
+      color: var(--ink-60);
+      display: flex;
+      gap: 0.6rem;
+      align-items: baseline;
+    }
+    .tip::before {
+      content: "→";
+      color: var(--accent);
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    /* ─────────────────────────────────────────────────────────
+       THRESHOLD VISUALIZATION
+    ───────────────────────────────────────────────────────── */
+    #threshold-viz { padding: 7rem 0; }
+
+    .thresh-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.4fr;
+      gap: 5rem;
+      align-items: start;
+    }
+    .thresh-left h2 { margin-bottom: 1.5rem; }
+    .thresh-left p { color: var(--ink-60); margin-bottom: 1.5rem; }
+
+    .eer-note {
+      border-left: 3px solid var(--accent);
+      padding-left: 1.2rem;
+      margin-top: 2rem;
+    }
+    .eer-note p {
+      font-size: 0.88rem;
+      color: var(--ink-60);
+      margin-bottom: 0.5rem;
+    }
+    .eer-cmd {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: var(--accent);
+    }
+
+    .thresh-right {}
+    .canvas-wrap {
+      position: relative;
+      background: var(--white);
+      border: 1px solid var(--border);
+      padding: 1.5rem;
+    }
+    .canvas-wrap canvas { display: block; width: 100%; height: auto; }
+
+    .thresh-slider-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .thresh-slider-row label {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+      color: var(--ink-60);
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .thresh-slider-row input { flex: 1; accent-color: var(--accent); }
+    .thresh-slider-row .t-val {
+      font-family: var(--mono);
+      font-size: 0.88rem;
+      font-weight: 500;
+      color: var(--accent);
+      min-width: 3rem;
+    }
+
+    .rate-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      background: var(--border);
+      margin-top: 1rem;
+    }
+    .rate-cell {
+      background: var(--white);
+      padding: 1rem 1.2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+    .rate-name {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink-60);
+    }
+    .rate-val {
+      font-family: var(--serif);
+      font-size: 2rem;
+      line-height: 1;
+      color: var(--ink);
+    }
+    .rate-desc {
+      font-size: 0.75rem;
+      color: var(--ink-60);
+    }
+
+    /* ─────────────────────────────────────────────────────────
+       EVALUATION
+    ───────────────────────────────────────────────────────── */
+    #evaluation { padding: 7rem 0; }
+
+    .eval-top {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 4rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 2rem;
+    }
+    .eval-top h2 { margin-bottom: 0; }
+    .illustrative-badge {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.06em;
+      color: var(--ink-60);
+      border: 1px solid var(--border);
+      padding: 0.35em 0.8em;
+      text-transform: uppercase;
+    }
+
+    .eval-metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1px;
+      background: var(--border);
+      margin-bottom: 4rem;
+    }
+    .eval-metric {
+      background: var(--white);
+      padding: 2rem;
+    }
+    .eval-metric .m-label {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink-60);
+      margin-bottom: 0.6rem;
+    }
+    .eval-metric .m-val {
+      font-family: var(--serif);
+      font-size: 2.8rem;
+      line-height: 1;
+      color: var(--ink);
+      margin-bottom: 0.3rem;
+    }
+    .eval-metric .m-desc {
+      font-size: 0.8rem;
+      color: var(--ink-60);
+    }
+
+    .eval-bars-section { margin-bottom: 4rem; }
+    .eval-bars-title {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink-60);
+      margin-bottom: 1.5rem;
+      padding-bottom: 0.8rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .eval-bar-row {
+      display: grid;
+      grid-template-columns: 160px 1fr 60px;
+      gap: 1.2rem;
+      align-items: center;
+      padding: 0.7rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .eval-bar-row:last-child { border-bottom: none; }
+    .eval-bar-label {
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+    .eval-bar-track {
+      height: 6px;
+      background: var(--step-num);
+      position: relative;
+    }
+    .eval-bar-fill {
+      height: 100%;
+      background: var(--ink);
+      width: 0;
+      transition: width 1.2s cubic-bezier(0.4,0,0.2,1);
+    }
+    .eval-bar-fill.far { background: var(--accent); }
+    .eval-bar-fill.frr { background: var(--accent); }
+    .eval-bar-pct {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: var(--ink-60);
+      text-align: right;
+    }
+
+    .eval-counts {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--border);
+    }
+    .eval-count-cell {
+      background: var(--cream-alt);
+      padding: 1.5rem;
+    }
+    .eval-count-cell .c-num {
+      font-family: var(--serif);
+      font-size: 3rem;
+      line-height: 1;
+      margin-bottom: 0.3rem;
+    }
+    .eval-count-cell .c-label {
+      font-size: 0.82rem;
+      color: var(--ink-60);
+    }
+    .c-num.good  { color: var(--known); }
+    .c-num.bad   { color: var(--accent); }
+    .c-num.plain { color: var(--ink); }
+
+    /* ─────────────────────────────────────────────────────────
+       FAILURE CASES
+    ───────────────────────────────────────────────────────── */
+    #failures { padding: 7rem 0; }
+
+    .failures-header { margin-bottom: 4rem; }
+    .failures-header h2 { margin-bottom: 0.5rem; }
+    .failures-header p { color: var(--ink-60); max-width: 520px; }
+
+    .failures-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+    .failures-table th {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink-60);
+      text-align: left;
+      padding: 0.8rem 1.2rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--white);
+    }
+    .failures-table td {
+      padding: 1rem 1.2rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+      color: var(--ink);
+    }
+    .failures-table tr:hover td { background: var(--white); }
+
+    .status-pill {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 0.25em 0.7em;
+      border-radius: 2px;
+    }
+    .status-ok    { background: rgba(45,96,64,0.12); color: var(--known); border: 1px solid rgba(45,96,64,0.2); }
+    .status-warn  { background: rgba(160,130,30,0.1); color: #8B7320; border: 1px solid rgba(160,130,30,0.25); }
+    .status-fail  { background: rgba(176,58,36,0.1);  color: var(--accent); border: 1px solid rgba(176,58,36,0.25); }
+
+    .scenario-name { font-weight: 600; color: var(--ink); }
+    .failure-note  { font-size: 0.8rem; color: var(--ink-60); margin-top: 0.2rem; }
+
+    /* ─────────────────────────────────────────────────────────
+       IMPROVEMENTS
+    ───────────────────────────────────────────────────────── */
+    #improvements { padding: 7rem 0; }
+
+    .impr-grid {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 5rem;
+    }
+    .impr-left h2 { margin-bottom: 1rem; }
+    .impr-left p { color: var(--ink-60); font-size: 0.95rem; }
+
+    .impr-list {
+      display: flex;
+      flex-direction: column;
+    }
+    .impr-item {
+      display: grid;
+      grid-template-columns: 2rem 1fr;
+      gap: 1.5rem;
+      padding: 2rem 0;
+      border-bottom: 1px solid var(--border);
+      align-items: start;
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity 0.5s, transform 0.5s;
+    }
+    .impr-item.visible { opacity: 1; transform: translateY(0); }
+    .impr-item:last-child { border-bottom: none; }
+    .impr-idx {
+      font-family: var(--serif);
+      font-size: 1.3rem;
+      color: var(--ink-30);
+      line-height: 1;
+      padding-top: 0.2rem;
+    }
+    .impr-content h4 {
+      font-weight: 600;
+      font-size: 1rem;
+      margin-bottom: 0.4rem;
+    }
+    .impr-content p {
+      font-size: 0.88rem;
+      color: var(--ink-60);
+    }
+
+    /* ─────────────────────────────────────────────────────────
+       FOOTER
+    ───────────────────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 3rem 0;
+      background: var(--white);
+    }
+    .footer-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .footer-brand {
+      font-family: var(--serif);
+      font-size: 1.2rem;
+    }
+    .footer-brand span { color: var(--accent); }
+    .footer-stack {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      color: var(--ink-60);
+      letter-spacing: 0.06em;
+    }
+    .footer-copy {
+      font-size: 0.78rem;
+      color: var(--ink-60);
+    }
+
+    /* ─────────────────────────────────────────────────────────
+       LIVE SYSTEM SECTION
+    ───────────────────────────────────────────────────────── */
+
+    #live-system {
+      padding: 0;
+      background: var(--white);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* Status bar */
+    .ls-status-bar {
+      display: flex; align-items: center; gap: 1rem;
+      padding: 0.85rem 2.5rem;
+      background: var(--ink);
+      color: rgba(255,255,255,0.6);
+      font-family: var(--mono); font-size: 0.72rem;
+      letter-spacing: 0.06em;
+    }
+    .ls-status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #6B6B6B; flex-shrink: 0;
+      transition: background 0.4s;
+    }
+    .ls-status-dot.online  { background: #5CBF7A; box-shadow: 0 0 6px #5CBF7A; }
+    .ls-status-dot.offline { background: #CF5B4A; }
+    .ls-status-dot.loading { animation: status-blink 1s ease-in-out infinite; }
+    @keyframes status-blink { 0%,100%{opacity:1;} 50%{opacity:0.25;} }
+    #ls-status-text { flex: 1; color: rgba(255,255,255,0.5); }
+    #ls-status-text.online  { color: #5CBF7A; }
+    #ls-status-text.offline { color: #CF5B4A; }
+    .ls-status-cmd {
+      font-family: var(--mono); font-size: 0.68rem;
+      color: rgba(255,255,255,0.3);
+    }
+    .ls-status-cmd strong { color: #C9B97A; }
+    .ls-enrolled-badge {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      font-family: var(--mono); font-size: 0.68rem;
+      color: rgba(255,255,255,0.4);
+      border: 1px solid rgba(255,255,255,0.12);
+      padding: 0.25em 0.7em;
+      border-radius: 2px;
+    }
+
+    /* Tabs */
+    .ls-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      background: var(--cream-alt);
+      padding: 0 2.5rem;
+    }
+    .ls-tab-btn {
+      padding: 1.1rem 1.6rem;
+      background: none; border: none;
+      font-family: var(--sans); font-size: 0.88rem; font-weight: 600;
+      color: var(--ink-60); cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color 0.2s, border-color 0.2s;
+      letter-spacing: 0.01em;
+    }
+    .ls-tab-btn:hover { color: var(--ink); }
+    .ls-tab-btn.active {
+      color: var(--ink); border-bottom-color: var(--accent);
+    }
+    .ls-tab-label {
+      font-family: var(--mono); font-size: 0.62rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      margin-right: 0.5rem; color: var(--ink-30);
+    }
+
+    /* Panels */
+    .ls-panel { display: none; padding: 3rem 2.5rem; }
+    .ls-panel.active { display: block; }
+
+    /* Two-column panel layout */
+    .ls-panel-grid {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 3rem;
+      align-items: start;
+    }
+
+    /* Left column (controls) */
+    .ls-controls { display: flex; flex-direction: column; gap: 1rem; }
+
+    .ls-field-label {
+      font-family: var(--mono); font-size: 0.68rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--ink-60); margin-bottom: 0.4rem; display: block;
+    }
+    .ls-input {
+      width: 100%;
+      border: 1px solid var(--border); background: var(--white);
+      padding: 0.75rem 1rem; font-family: var(--sans);
+      font-size: 0.95rem; color: var(--ink);
+      outline: none; transition: border-color 0.2s;
+    }
+    .ls-input:focus { border-color: var(--ink); }
+    .ls-input::placeholder { color: var(--ink-30); }
+
+    /* Drop zone */
+    .ls-drop-zone {
+      border: 1px dashed var(--border); background: var(--cream-alt);
+      padding: 2rem 1rem; text-align: center;
+      cursor: pointer; transition: all 0.2s; min-height: 120px;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 0.5rem; position: relative;
+    }
+    .ls-drop-zone:hover, .ls-drop-zone.drag-over {
+      border-color: var(--accent); background: rgba(176,58,36,0.04);
+    }
+    .ls-drop-zone input[type=file] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .ls-drop-icon {
+      font-size: 1.5rem; color: var(--ink-30);
+    }
+    .ls-drop-text {
+      font-size: 0.85rem; color: var(--ink-60);
+    }
+    .ls-drop-hint {
+      font-family: var(--mono); font-size: 0.68rem; color: var(--ink-30);
+    }
+
+    /* Thumbnail strip */
+    .ls-thumb-strip {
+      display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem;
+    }
+    .ls-thumb {
+      width: 64px; height: 64px; object-fit: cover;
+      border: 1px solid var(--border);
+    }
+    .ls-thumb-count {
+      font-family: var(--mono); font-size: 0.72rem; color: var(--ink-60);
+      align-self: center;
+    }
+
+    /* Threshold row */
+    .ls-threshold-row {
+      display: flex; align-items: center; gap: 1rem;
+      padding: 0.8rem 1rem; background: var(--cream-alt);
+      border: 1px solid var(--border);
+    }
+    .ls-threshold-row label {
+      font-family: var(--mono); font-size: 0.68rem;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--ink-60); white-space: nowrap;
+    }
+    .ls-threshold-row input { flex: 1; accent-color: var(--ink); }
+    .ls-threshold-num {
+      font-family: var(--mono); font-size: 0.9rem;
+      font-weight: 500; color: var(--accent); min-width: 3rem; text-align: right;
+    }
+
+    /* Action button */
+    .ls-btn {
+      width: 100%; padding: 0.9rem;
+      background: var(--ink); color: var(--white);
+      border: none; font-family: var(--sans);
+      font-size: 0.9rem; font-weight: 600;
+      cursor: pointer; transition: background 0.2s; letter-spacing: 0.02em;
+    }
+    .ls-btn:hover { background: #2E2820; }
+    .ls-btn:disabled { background: var(--ink-30); cursor: not-allowed; }
+    .ls-btn-accent {
+      background: var(--accent);
+    }
+    .ls-btn-accent:hover { background: #9A3320; }
+
+    /* Result area (right column) */
+    .ls-result-area {
+      min-height: 300px;
+    }
+
+    /* Placeholder state */
+    .ls-placeholder {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 0.8rem;
+      min-height: 280px; border: 1px dashed var(--border);
+      color: var(--ink-30); padding: 2rem;
+    }
+    .ls-placeholder svg { opacity: 0.3; }
+    .ls-placeholder p {
+      font-family: var(--mono); font-size: 0.75rem;
+      text-align: center; line-height: 1.6;
+    }
+
+    /* Enrollment result */
+    .enroll-success {
+      padding: 2rem; background: rgba(45,96,64,0.06);
+      border: 1px solid rgba(45,96,64,0.2);
+    }
+    .enroll-success .es-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+    .enroll-success .es-name {
+      font-family: var(--serif); font-size: 2rem; color: var(--known); margin-bottom: 1rem;
+    }
+    .enroll-success .es-meta {
+      font-family: var(--mono); font-size: 0.78rem; color: var(--ink-60);
+      display: flex; flex-direction: column; gap: 0.4rem;
+    }
+    .enroll-error {
+      padding: 2rem; background: rgba(176,58,36,0.06);
+      border: 1px solid rgba(176,58,36,0.2);
+    }
+    .enroll-error p {
+      font-family: var(--mono); font-size: 0.82rem; color: var(--accent); line-height: 1.6;
+    }
+
+    /* Identify result */
+    .id-result-wrap {
+      display: flex; flex-direction: column; gap: 1.5rem;
+    }
+    .id-annotated-img {
+      width: 100%; border: 1px solid var(--border);
+      display: block;
+    }
+    .id-face-cards { display: flex; flex-direction: column; gap: 1rem; }
+    .id-face-card {
+      padding: 1.2rem; border: 1px solid var(--border); background: var(--white);
+    }
+    .id-face-card.known   { border-color: rgba(45,96,64,0.35); background: rgba(45,96,64,0.04); }
+    .id-face-card.unknown { border-color: rgba(176,58,36,0.3); background: rgba(176,58,36,0.04); }
+    .id-face-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 0.8rem;
+    }
+    .id-face-name {
+      font-family: var(--serif); font-size: 1.6rem; line-height: 1;
+    }
+    .id-face-name.known   { color: var(--known); }
+    .id-face-name.unknown { color: var(--accent); font-style: italic; }
+    .id-verdict {
+      font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.1em;
+      text-transform: uppercase; padding: 0.3em 0.8em;
+    }
+    .id-verdict.ok  { color: var(--known);  border: 1px solid rgba(45,96,64,0.3);  background: rgba(45,96,64,0.08); }
+    .id-verdict.unk { color: var(--accent); border: 1px solid rgba(176,58,36,0.25); background: rgba(176,58,36,0.06); }
+    .id-scores { margin-top: 0.8rem; }
+    .id-score-row {
+      display: grid; grid-template-columns: 120px 1fr 56px;
+      gap: 0.6rem; align-items: center; margin-bottom: 0.4rem;
+    }
+    .id-score-name { font-size: 0.8rem; font-weight: 500; }
+    .id-score-bar-wrap { height: 5px; background: var(--step-num); }
+    .id-score-bar {
+      height: 100%; background: var(--ink-30); width: 0;
+      transition: width 0.6s cubic-bezier(0.4,0,0.2,1);
+    }
+    .id-score-bar.top { background: var(--known); }
+    .id-score-bar.top.unknown-top { background: var(--accent); }
+    .id-score-val { font-family: var(--mono); font-size: 0.7rem; color: var(--ink-60); text-align: right; }
+    .id-no-faces {
+      padding: 2rem; border: 1px solid var(--border);
+      text-align: center; font-family: var(--mono); font-size: 0.82rem;
+      color: var(--ink-60);
+    }
+
+    /* Database panel */
+    .db-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1px; background: var(--border);
+    }
+    .db-person-card {
+      background: var(--white); padding: 1.5rem;
+      display: flex; flex-direction: column; gap: 0.6rem;
+    }
+    .db-person-name {
+      font-family: var(--serif); font-size: 1.2rem;
+      word-break: break-word;
+    }
+    .db-person-meta {
+      font-family: var(--mono); font-size: 0.68rem; color: var(--ink-60);
+    }
+    .db-delete-btn {
+      margin-top: auto; background: none; border: 1px solid var(--border);
+      padding: 0.4rem 0.8rem; font-family: var(--mono);
+      font-size: 0.68rem; color: var(--ink-60); cursor: pointer;
+      transition: all 0.2s; text-align: left;
+    }
+    .db-delete-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .db-empty {
+      padding: 4rem; text-align: center;
+      font-family: var(--mono); font-size: 0.82rem; color: var(--ink-30);
+    }
+    .db-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 2rem;
+    }
+    .db-header h3 { font-family: var(--serif); font-size: 1.5rem; }
+    .db-count {
+      font-family: var(--mono); font-size: 0.75rem; color: var(--ink-60);
+    }
+    .db-refresh-btn {
+      background: none; border: 1px solid var(--border);
+      padding: 0.5rem 1rem; font-family: var(--mono);
+      font-size: 0.7rem; color: var(--ink-60); cursor: pointer;
+      transition: all 0.2s; letter-spacing: 0.06em;
+    }
+    .db-refresh-btn:hover { border-color: var(--ink); color: var(--ink); }
+
+    /* Spinner */
+    .ls-spinner {
+      display: inline-block; width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.2);
+      border-top-color: white; border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      vertical-align: middle; margin-right: 0.5rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Toast notification */
+    #ls-toast {
+      position: fixed; bottom: 2rem; right: 2rem;
+      background: var(--ink); color: var(--white);
+      font-family: var(--mono); font-size: 0.78rem;
+      padding: 0.8rem 1.4rem; border-left: 3px solid var(--accent);
+      opacity: 0; transform: translateY(8px);
+      transition: opacity 0.3s, transform 0.3s;
+      pointer-events: none; z-index: 200;
+      max-width: 360px;
+    }
+    #ls-toast.show { opacity: 1; transform: translateY(0); }
+    #ls-toast.good { border-left-color: #5CBF7A; }
+    #ls-toast.bad  { border-left-color: #CF5B4A; }
+
+    @media (max-width: 900px) {
+      .ls-panel-grid { grid-template-columns: 1fr; }
+      .ls-tabs { padding: 0 1rem; }
+      .ls-panel { padding: 2rem 1rem; }
+    }
+
+    /* ─────────────────────────────────────────────────────────
+       WEBCAM MODAL
+    ───────────────────────────────────────────────────────── */
+    #webcam-modal {
+      display: none;
+      position: fixed; inset: 0; z-index: 600;
+      background: rgba(0,0,0,0.92);
+      align-items: center; justify-content: center;
+    }
+    #webcam-modal.open { display: flex; }
+    .wc-box {
+      background: var(--ink);
+      width: min(560px, 95vw);
+      position: relative;
+      padding: 2rem;
+    }
+    .wc-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 1.2rem;
+    }
+    .wc-title {
+      font-family: var(--mono); font-size: 0.72rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: rgba(255,255,255,0.4);
+    }
+    .wc-close {
+      background: none; border: none;
+      color: rgba(255,255,255,0.4); cursor: pointer;
+      font-size: 1.4rem; line-height: 1;
+      transition: color 0.2s;
+    }
+    .wc-close:hover { color: white; }
+    #webcam-video {
+      width: 100%; display: block;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: #000;
+      min-height: 240px;
+    }
+    .wc-controls {
+      display: flex; gap: 0.8rem; margin-top: 1rem;
+    }
+    .wc-btn {
+      flex: 1; padding: 0.8rem;
+      font-family: var(--sans); font-size: 0.85rem; font-weight: 600;
+      cursor: pointer; border: none; transition: background 0.2s;
+    }
+    .wc-btn-cap  { background: var(--accent); color: white; }
+    .wc-btn-cap:hover { background: #9A3320; }
+    .wc-btn-done { background: var(--known); color: white; }
+    .wc-btn-done:hover { background: #235032; }
+    .wc-btn-done:disabled { background: #4a6b5a; cursor: not-allowed; }
+    .wc-count-badge {
+      display: inline-block;
+      background: rgba(255,255,255,0.15);
+      border-radius: 2px; padding: 0.1em 0.5em;
+      font-family: var(--mono); font-size: 0.72rem;
+      margin-left: 0.4rem;
+    }
+    #wc-thumbs {
+      display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 1rem;
+    }
+    .wc-thumb {
+      width: 56px; height: 56px; object-fit: cover;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+    .wc-status {
+      font-family: var(--mono); font-size: 0.68rem;
+      color: rgba(255,255,255,0.3); margin-top: 0.8rem;
+    }
+    /* Webcam trigger button inside enroll panel */
+    .wc-trigger-btn {
+      width: 100%; padding: 0.75rem;
+      background: none; border: 1px dashed var(--border);
+      font-family: var(--sans); font-size: 0.85rem; font-weight: 600;
+      color: var(--ink-60); cursor: pointer;
+      transition: all 0.2s; letter-spacing: 0.02em;
+      display: flex; align-items: center; justify-content: center; gap: 0.6rem;
+    }
+    .wc-trigger-btn:hover {
+      border-color: var(--ink); color: var(--ink);
+    }
+    .wc-trigger-btn svg { flex-shrink: 0; }
+
+    /* ─────────────────────────────────────────────────────────
+       SCROLL ANIMATIONS
+    ───────────────────────────────────────────────────────── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ─────────────────────────────────────────────────────────
+       RESPONSIVE (basic)
+    ───────────────────────────────────────────────────────── */
+    @media (max-width: 1024px) {
+      .pipeline-steps { grid-template-columns: repeat(2, 1fr); }
+      .step:nth-child(2) { border-right: none; }
+      .step:nth-child(3) { border-top: 1px solid var(--border); }
+      .step:nth-child(4) { border-top: 1px solid var(--border); }
+      .eval-metrics-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    /* ─────────────────────────────────────────────────────────
+       RECOGNITION DEMO (Centerpiece)
+    ───────────────────────────────────────────────────────── */
+    #recognition-demo {
+      background: var(--ink);
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .rd-head {
+      display: flex; align-items: flex-end; justify-content: space-between;
+      padding: 3.5rem 2.5rem 2.5rem;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      flex-wrap: wrap; gap: 1rem;
+    }
+    .rd-head-left h2 {
+      font-family: var(--serif); font-size: clamp(2rem, 5vw, 3.5rem);
+      color: var(--white); line-height: 1.05; margin-bottom: 0.6rem;
+    }
+    .rd-head-left .rd-sub {
+      font-family: var(--mono); font-size: 0.72rem;
+      color: rgba(255,255,255,0.3); letter-spacing: 0.1em;
+    }
+    .rd-head-right {
+      display: flex; align-items: center; gap: 1.5rem;
+    }
+    /* Source toggle */
+    .rd-source-toggle {
+      display: flex; border: 1px solid rgba(255,255,255,0.12);
+    }
+    .rd-src-btn {
+      padding: 0.55rem 1.1rem;
+      background: none; border: none;
+      font-family: var(--mono); font-size: 0.68rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: rgba(255,255,255,0.35); cursor: pointer;
+      transition: all 0.2s; border-right: 1px solid rgba(255,255,255,0.12);
+    }
+    .rd-src-btn:last-child { border-right: none; }
+    .rd-src-btn.active {
+      background: var(--accent); color: white;
+    }
+    .rd-src-btn:not(.active):hover { color: rgba(255,255,255,0.7); }
+    /* Live badge */
+    .rd-live-badge {
+      display: none; align-items: center; gap: 0.5rem;
+      font-family: var(--mono); font-size: 0.68rem;
+      color: #5CBF7A; letter-spacing: 0.08em;
+    }
+    .rd-live-badge.show { display: flex; }
+    .rd-live-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #5CBF7A; animation: live-pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes live-pulse { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:0.4;transform:scale(0.7);} }
+
+    /* Arena */
+    .rd-arena {
+      display: grid;
+      grid-template-columns: 400px 1fr;
+      min-height: 520px;
+    }
+    /* Left panel — controls */
+    .rd-controls {
+      border-right: 1px solid rgba(255,255,255,0.07);
+      padding: 2.5rem;
+      display: flex; flex-direction: column; gap: 1.2rem;
+    }
+    .rd-control-label {
+      font-family: var(--mono); font-size: 0.65rem;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: rgba(255,255,255,0.3); margin-bottom: 0.4rem; display: block;
+    }
+    /* Drop zone (dark variant) */
+    .rd-drop-zone {
+      border: 1px dashed rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.03);
+      padding: 1.8rem 1rem; text-align: center;
+      cursor: pointer; transition: all 0.2s;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 0.5rem; position: relative;
+      min-height: 140px;
+    }
+    .rd-drop-zone:hover, .rd-drop-zone.drag-over {
+      border-color: var(--accent); background: rgba(176,58,36,0.06);
+    }
+    .rd-drop-zone input[type=file] {
+      position: absolute; inset: 0; opacity: 0;
+      cursor: pointer; width: 100%; height: 100%;
+    }
+    .rd-drop-icon { font-size: 1.4rem; color: rgba(255,255,255,0.2); }
+    .rd-drop-text { font-size: 0.82rem; color: rgba(255,255,255,0.4); }
+    .rd-drop-hint {
+      font-family: var(--mono); font-size: 0.65rem;
+      color: rgba(255,255,255,0.2);
+    }
+    /* Webcam preview inside controls */
+    #rd-webcam-preview {
+      width: 100%; display: none; border: 1px solid rgba(255,255,255,0.1);
+      background: #000; min-height: 200px;
+    }
+    #rd-webcam-preview.show { display: block; }
+    /* Threshold (dark) */
+    .rd-threshold-row {
+      display: flex; align-items: center; gap: 0.8rem;
+    }
+    .rd-threshold-row label {
+      font-family: var(--mono); font-size: 0.65rem;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: rgba(255,255,255,0.3); white-space: nowrap;
+    }
+    .rd-threshold-row input { flex: 1; accent-color: var(--accent); }
+    .rd-threshold-val {
+      font-family: var(--mono); font-size: 0.88rem;
+      font-weight: 500; color: var(--accent); min-width: 2.5rem; text-align: right;
+    }
+    /* Buttons */
+    .rd-btn {
+      padding: 0.9rem; width: 100%;
+      font-family: var(--sans); font-size: 0.9rem; font-weight: 700;
+      cursor: pointer; border: none; transition: all 0.2s; letter-spacing: 0.02em;
+    }
+    .rd-btn-primary { background: var(--accent); color: white; }
+    .rd-btn-primary:hover { background: #9A3320; }
+    .rd-btn-primary:disabled { background: rgba(176,58,36,0.35); cursor: not-allowed; }
+    .rd-btn-live {
+      background: transparent;
+      border: 1px solid rgba(92,191,122,0.4);
+      color: #5CBF7A;
+    }
+    .rd-btn-live:hover { background: rgba(92,191,122,0.08); }
+    .rd-btn-live.active {
+      background: rgba(92,191,122,0.15);
+      border-color: #5CBF7A;
+    }
+    .rd-upload-preview {
+      width: 100%; display: none;
+      border: 1px solid rgba(255,255,255,0.1); margin-top: 0.3rem;
+    }
+    .rd-upload-preview.show { display: block; }
+
+    /* Right panel — result */
+    .rd-output {
+      display: flex; flex-direction: column;
+      justify-content: center; align-items: center;
+      position: relative; overflow: hidden;
+      padding: 2.5rem;
+    }
+    /* Waiting state */
+    .rd-waiting {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 1rem; color: rgba(255,255,255,0.12); text-align: center;
+    }
+    .rd-waiting svg { width: 64px; height: 64px; }
+    .rd-waiting p {
+      font-family: var(--mono); font-size: 0.75rem;
+      letter-spacing: 0.06em; line-height: 1.8;
+    }
+    /* Result state */
+    .rd-result { display: none; width: 100%; }
+    .rd-result.show { display: block; }
+    .rd-annotated-img {
+      width: 100%; max-height: 380px; object-fit: contain;
+      border: 1px solid rgba(255,255,255,0.08); display: block;
+      margin-bottom: 1.5rem;
+    }
+    /* Verdict cards */
+    .rd-verdicts { display: flex; flex-direction: column; gap: 0.8rem; }
+    .rd-verdict-card {
+      padding: 1.2rem 1.5rem;
+      border-left: 3px solid;
+      background: rgba(255,255,255,0.04);
+    }
+    .rd-verdict-card.known { border-color: #5CBF7A; }
+    .rd-verdict-card.unknown { border-color: var(--accent); }
+    .rd-verdict-name {
+      font-family: var(--serif); font-size: 2rem; line-height: 1;
+      margin-bottom: 0.5rem;
+    }
+    .rd-verdict-name.known  { color: #5CBF7A; }
+    .rd-verdict-name.unknown { color: var(--accent); font-style: italic; }
+    .rd-verdict-meta {
+      font-family: var(--mono); font-size: 0.7rem;
+      color: rgba(255,255,255,0.4); margin-bottom: 0.8rem;
+    }
+    .rd-confidence-track {
+      height: 4px; background: rgba(255,255,255,0.08); margin-bottom: 0.5rem;
+    }
+    .rd-confidence-bar {
+      height: 100%; width: 0;
+      transition: width 0.8s cubic-bezier(0.4,0,0.2,1);
+    }
+    .rd-verdict-card.known  .rd-confidence-bar { background: #5CBF7A; }
+    .rd-verdict-card.unknown .rd-confidence-bar { background: var(--accent); }
+    .rd-all-scores { margin-top: 0.8rem; display: flex; flex-direction: column; gap: 0.35rem; }
+    .rd-score-row {
+      display: grid; grid-template-columns: 1fr 60px 50px;
+      gap: 0.5rem; align-items: center;
+    }
+    .rd-score-name { font-size: 0.75rem; color: rgba(255,255,255,0.5); }
+    .rd-score-mini-bar { height: 3px; background: rgba(255,255,255,0.06); }
+    .rd-score-mini-fill { height: 100%; background: rgba(255,255,255,0.25); }
+    .rd-score-mini-fill.top { background: #5CBF7A; }
+    .rd-score-num {
+      font-family: var(--mono); font-size: 0.65rem;
+      color: rgba(255,255,255,0.35); text-align: right;
+    }
+    /* Error state */
+    .rd-error {
+      display: none; padding: 1.5rem;
+      border: 1px solid rgba(176,58,36,0.3);
+      background: rgba(176,58,36,0.06);
+      font-family: var(--mono); font-size: 0.78rem;
+      color: var(--accent); line-height: 1.7;
+    }
+    .rd-error.show { display: block; }
+    /* Processing spinner */
+    .rd-processing {
+      display: none; flex-direction: column;
+      align-items: center; gap: 1rem;
+    }
+    .rd-processing.show { display: flex; }
+    .rd-spinner {
+      width: 36px; height: 36px;
+      border: 2px solid rgba(255,255,255,0.1);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    .rd-spin-label {
+      font-family: var(--mono); font-size: 0.72rem;
+      color: rgba(255,255,255,0.3); letter-spacing: 0.06em;
+    }
+    /* Live mode strip at bottom */
+    .rd-live-strip {
+      display: none;
+      padding: 0.7rem 2.5rem;
+      background: rgba(92,191,122,0.08);
+      border-top: 1px solid rgba(92,191,122,0.15);
+      font-family: var(--mono); font-size: 0.68rem;
+      color: rgba(92,191,122,0.7);
+      letter-spacing: 0.06em;
+      align-items: center; gap: 1rem;
+    }
+    .rd-live-strip.show { display: flex; }
+    .rd-live-counter { margin-left: auto; color: rgba(255,255,255,0.3); }
+
+    @media (max-width: 900px) {
+      .rd-arena { grid-template-columns: 1fr; }
+      .rd-controls { border-right: none; border-bottom: 1px solid rgba(255,255,255,0.07); }
+      .rd-head { flex-direction: column; align-items: flex-start; }
+    }
+
+    /* ─────────────────────────────────────────────────────────
+       PAGE LOADER
+    ───────────────────────────────────────────────────────── */
+    #page-loader {
+      position: fixed; inset: 0; z-index: 9999;
+      background: var(--ink);
+      display: flex; align-items: center; justify-content: center;
+      transition: opacity 0.5s ease, visibility 0.5s ease;
+    }
+    #page-loader.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+    .loader-inner {
+      display: flex; flex-direction: column; align-items: center; gap: 1.5rem;
+    }
+    .loader-brand {
+      font-family: var(--serif); font-size: 2rem; color: var(--white);
+    }
+    .loader-brand span { color: var(--accent); }
+    .loader-bar-wrap {
+      width: 180px; height: 2px; background: rgba(255,255,255,0.1);
+    }
+    .loader-bar {
+      height: 100%; background: var(--accent); width: 0;
+      animation: loader-fill 0.9s cubic-bezier(0.4,0,0.2,1) forwards;
+    }
+    @keyframes loader-fill { to { width: 100%; } }
+    .loader-label {
+      font-family: var(--mono); font-size: 0.68rem;
+      letter-spacing: 0.12em; color: rgba(255,255,255,0.3);
+      text-transform: uppercase;
+    }
+
+    /* ─────────────────────────────────────────────────────────
+       SCROLL PROGRESS
+    ───────────────────────────────────────────────────────── */
+    #scroll-progress {
+      position: fixed; top: 60px; left: 0; right: 0;
+      height: 2px; z-index: 99;
+      background: rgba(176,58,36,0.15);
+    }
+    #scroll-progress-bar {
+      height: 100%; background: var(--accent); width: 0;
+      transition: width 0.1s linear;
+    }
+
+    /* Active nav link */
+    .nav-links a.active { color: var(--ink); border-bottom: 1px solid var(--accent); }
+
+    /* ─────────────────────────────────────────────────────────
+       TECH SPECS SECTION
+    ───────────────────────────────────────────────────────── */
+    #tech-specs {
+      background: var(--ink); color: var(--white); padding: 5rem 0;
+    }
+    #tech-specs .spec-header {
+      display: flex; align-items: baseline; justify-content: space-between;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      padding-bottom: 2rem; margin-bottom: 3rem;
+    }
+    #tech-specs h2 { color: var(--white); }
+    #tech-specs .spec-eyebrow {
+      font-family: var(--mono); font-size: 0.68rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: rgba(255,255,255,0.35);
+    }
+    .specs-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: rgba(255,255,255,0.08);
+      margin-bottom: 3rem;
+    }
+    .spec-cell {
+      background: var(--ink);
+      padding: 2rem;
+      border: none;
+    }
+    .spec-cell .s-label {
+      font-family: var(--mono); font-size: 0.65rem;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: rgba(255,255,255,0.35); margin-bottom: 0.8rem;
+    }
+    .spec-cell .s-val {
+      font-family: var(--mono); font-size: 0.95rem;
+      color: var(--white); line-height: 1.6;
+    }
+    .spec-cell .s-val strong { color: var(--accent); font-weight: 500; }
+    .spec-commands {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
+      background: rgba(255,255,255,0.08);
+    }
+    .spec-cmd-group {
+      background: var(--ink); padding: 1.5rem 2rem;
+    }
+    .spec-cmd-group .cmd-label {
+      font-family: var(--mono); font-size: 0.65rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: rgba(255,255,255,0.3); margin-bottom: 0.8rem;
+    }
+    .spec-cmd-group code {
+      display: block; font-family: var(--mono); font-size: 0.82rem;
+      color: rgba(255,255,255,0.75); line-height: 2.1;
+    }
+    .spec-cmd-group code .k { color: #C9B97A; }
+    .spec-cmd-group code .v { color: #88A47A; }
+    .spec-cmd-group code .c { color: rgba(255,255,255,0.3); font-style: italic; }
+
+    @media (max-width: 768px) {
+      .specs-grid { grid-template-columns: 1fr; }
+      .spec-commands { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 768px) {
+      .hero-grid { grid-template-columns: 1fr; }
+      .hero-visual { display: none; }
+      .intro-grid { grid-template-columns: 1fr; }
+      .intro-body { grid-template-columns: 1fr; }
+      .pipeline-steps { grid-template-columns: 1fr; }
+      .step { border-right: none; border-top: 1px solid var(--border); padding-right: 0 !important; }
+      .step:first-child { border-top: none; }
+      .demo-layout { grid-template-columns: 1fr; }
+      .enroll-grid { grid-template-columns: 1fr; }
+      .thresh-grid { grid-template-columns: 1fr; }
+      .impr-grid { grid-template-columns: 1fr; }
+      .footer-inner { flex-direction: column; gap: 1rem; text-align: center; }
+      .nav-links { display: none; }
+      .eval-metrics-grid { grid-template-columns: 1fr 1fr; }
+      .eval-counts { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+
+<body>
+
+<!-- ─── PAGE LOADER ─── -->
+<div id="page-loader">
+  <div class="loader-inner">
+    <div class="loader-brand">Face<span>ra</span></div>
+    <div class="loader-bar-wrap"><div class="loader-bar"></div></div>
+    <div class="loader-label">Loading ArcFace · ONNX Runtime</div>
+  </div>
+</div>
+
+<!-- ─── SCROLL PROGRESS ─── -->
+<div id="scroll-progress"><div id="scroll-progress-bar"></div></div>
+
+<!-- ─── NAV ─── -->
+<nav id="main-nav">
+  <div class="nav-brand">Face<span>ra</span></div>
+  <ul class="nav-links">
+    <li><a href="#pipeline">System</a></li>
+    <li><a href="#demo">Demo</a></li>
+    <li><a href="#threshold-viz">Threshold</a></li>
+    <li><a href="#evaluation">Evaluation</a></li>
+    <li><a href="#failures">Limitations</a></li>
+  </ul>
+  <a href="#improvements" class="nav-cta">Improvements →</a>
+</nav>
+
+
+<!-- ─── HERO ─── -->
+<section id="hero">
+  <div class="container">
+    <div class="hero-grid">
+
+      <!-- Left: Text -->
+      <div class="hero-text">
+        <span class="eyebrow">ArcFace · InsightFace · ONNX Runtime · CPU</span>
+        <h1 style="margin-top:1.8rem;">
+          Who is<br><em>this face?</em>
+        </h1>
+        <p class="hero-tagline" style="margin-top:1.8rem;">
+          A complete face recognition identification system — detection,
+          embedding, similarity matching, and unknown rejection — running
+          on a standard laptop CPU.
+        </p>
+        <div class="hero-meta">
+          <a href="#pipeline">How it works</a>
+          <span class="sep">·</span>
+          <a href="#demo">Interactive demo</a>
+          <span class="sep">·</span>
+          <a href="#evaluation">Evaluation metrics</a>
+        </div>
+
+        <div style="margin-top:3rem; display:flex; gap:3rem; border-top:1px solid var(--border); padding-top:2rem;">
+          <div>
+            <div class="label" style="margin-bottom:0.4rem;">Model</div>
+            <div style="font-family:var(--mono);font-size:0.85rem;">buffalo_l (ArcFace-R50)</div>
+          </div>
+          <div>
+            <div class="label" style="margin-bottom:0.4rem;">Embedding</div>
+            <div style="font-family:var(--mono);font-size:0.85rem;">512 dimensions</div>
+          </div>
+          <div>
+            <div class="label" style="margin-bottom:0.4rem;">Metric</div>
+            <div style="font-family:var(--mono);font-size:0.85rem;">Cosine similarity</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Face SVG -->
+      <div class="hero-visual">
+        <div class="face-wrap">
+          <svg class="face-svg" viewBox="0 0 500 520" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <pattern id="grid-pat" width="18" height="18" patternUnits="userSpaceOnUse">
+                <path d="M18 0 L0 0 0 18" fill="none" stroke="#D1CCC4" stroke-width="0.5"/>
+              </pattern>
+            </defs>
+            <!-- Background grid -->
+            <rect width="500" height="520" fill="url(#grid-pat)" opacity="0.5"/>
+
+            <!-- Face oval -->
+            <ellipse cx="220" cy="268" rx="128" ry="158" fill="none" stroke="#1A1510" stroke-width="1.4"/>
+
+            <!-- Left eye -->
+            <ellipse cx="178" cy="215" rx="20" ry="13" fill="none" stroke="#1A1510" stroke-width="1.3"/>
+            <circle cx="178" cy="215" r="5" fill="#1A1510"/>
+            <!-- Right eye -->
+            <ellipse cx="262" cy="215" rx="20" ry="13" fill="none" stroke="#1A1510" stroke-width="1.3"/>
+            <circle cx="262" cy="215" r="5" fill="#1A1510"/>
+
+            <!-- Eyebrows -->
+            <path d="M156 196 Q178 188 200 196" fill="none" stroke="#1A1510" stroke-width="1.2"/>
+            <path d="M242 196 Q262 188 284 196" fill="none" stroke="#1A1510" stroke-width="1.2"/>
+
+            <!-- Nose -->
+            <path d="M220 235 L213 272 Q220 282 227 272 L220 235" fill="none" stroke="#1A1510" stroke-width="1.2"/>
+
+            <!-- Mouth -->
+            <path d="M193 310 Q220 330 247 310" fill="none" stroke="#1A1510" stroke-width="1.3"/>
+
+            <!-- Scanning line (clipped to bbox) -->
+            <clipPath id="bbox-clip">
+              <rect x="68" y="88" width="304" height="360"/>
+            </clipPath>
+            <rect x="68" y="88" width="304" height="3" fill="rgba(176,58,36,0.35)" clip-path="url(#bbox-clip)" class="scan-line-anim"/>
+
+            <!-- Bounding box (dashed, animated) -->
+            <rect class="bbox-anim" x="68" y="88" width="304" height="360"
+              fill="none" stroke="#B03A24" stroke-width="1.8"
+              stroke-dasharray="12 6"/>
+
+            <!-- Corner accents (solid) -->
+            <path d="M68 122 L68 88 L104 88" fill="none" stroke="#B03A24" stroke-width="2.5"/>
+            <path d="M336 88 L372 88 L372 122" fill="none" stroke="#B03A24" stroke-width="2.5"/>
+            <path d="M68 414 L68 448 L104 448" fill="none" stroke="#B03A24" stroke-width="2.5"/>
+            <path d="M372 414 L372 448 L336 448" fill="none" stroke="#B03A24" stroke-width="2.5"/>
+
+            <!-- DETECTED label (top-left) -->
+            <rect x="68" y="64" width="150" height="24" fill="#B03A24"/>
+            <text x="76" y="80" font-family="'JetBrains Mono', monospace" font-size="10" fill="#FAF8F4" font-weight="500">DETECTED · conf: 0.97</text>
+
+            <!-- Result label (bottom) -->
+            <rect x="68" y="448" width="200" height="24" fill="#2D6040"/>
+            <text x="76" y="464" font-family="'JetBrains Mono', monospace" font-size="10" fill="#FAF8F4">sim: 0.8937 → IDENTIFIED</text>
+
+            <!-- 5 Landmark dots -->
+            <circle class="lm" cx="178" cy="215" r="4.5" fill="#B03A24"/>
+            <circle class="lm" cx="262" cy="215" r="4.5" fill="#B03A24"/>
+            <circle class="lm" cx="220" cy="280" r="4.5" fill="#B03A24"/>
+            <circle class="lm" cx="193" cy="310" r="4.5" fill="#B03A24"/>
+            <circle class="lm" cx="247" cy="310" r="4.5" fill="#B03A24"/>
+
+            <!-- Landmark connector lines -->
+            <line x1="178" y1="215" x2="220" y2="280" stroke="#B03A24" stroke-width="0.6" opacity="0.3"/>
+            <line x1="262" y1="215" x2="220" y2="280" stroke="#B03A24" stroke-width="0.6" opacity="0.3"/>
+            <line x1="220" y1="280" x2="193" y2="310" stroke="#B03A24" stroke-width="0.6" opacity="0.3"/>
+            <line x1="220" y1="280" x2="247" y2="310" stroke="#B03A24" stroke-width="0.6" opacity="0.3"/>
+
+            <!-- ── 512-d Embedding visualization (right panel) ── -->
+            <!-- Panel background -->
+            <rect x="400" y="88" width="82" height="360" fill="#E7E1D8"/>
+            <text x="441" y="80" font-family="'JetBrains Mono', monospace" font-size="9" fill="#786E67" text-anchor="middle">512-d</text>
+
+            <!-- 16 cols × 32 rows = 512 tiny cells -->
+            <!-- Generated as groups for each column -->
+            <g id="embed-viz" transform="translate(404, 92)"></g>
+
+            <!-- Horizontal axis label -->
+            <text x="400" y="468" font-family="'JetBrains Mono', monospace" font-size="8" fill="#B5AEA7">ArcFace embedding</text>
+
+          </svg>
+        </div>
+      </div>
+
+    </div><!-- /hero-grid -->
+  </div>
+</section>
+
+
+<!-- ─── MARQUEE ─── -->
+<div class="marquee-wrap">
+  <div class="marquee-track" id="marquee-track">
+    <span>RetinaFace Detection</span>
+    <span class="accent">·</span>
+    <span>ArcFace-R50</span>
+    <span class="accent">·</span>
+    <span>ONNX Runtime</span>
+    <span class="accent">·</span>
+    <span>512-dimensional Embeddings</span>
+    <span class="accent">·</span>
+    <span>Cosine Similarity</span>
+    <span class="accent">·</span>
+    <span>buffalo_l Model Pack</span>
+    <span class="accent">·</span>
+    <span>CPU Inference</span>
+    <span class="accent">·</span>
+    <span>InsightFace</span>
+    <span class="accent">·</span>
+    <span>5-Point Landmark Alignment</span>
+    <span class="accent">·</span>
+    <span>WebFace600K Training</span>
+    <span class="accent">·</span>
+    <span>Equal Error Rate</span>
+    <span class="accent">·</span>
+    <span>Unknown Rejection</span>
+    <span class="accent">·</span>
+    <!-- duplicate for seamless loop -->
+    <span>RetinaFace Detection</span>
+    <span class="accent">·</span>
+    <span>ArcFace-R50</span>
+    <span class="accent">·</span>
+    <span>ONNX Runtime</span>
+    <span class="accent">·</span>
+    <span>512-dimensional Embeddings</span>
+    <span class="accent">·</span>
+    <span>Cosine Similarity</span>
+    <span class="accent">·</span>
+    <span>buffalo_l Model Pack</span>
+    <span class="accent">·</span>
+    <span>CPU Inference</span>
+    <span class="accent">·</span>
+    <span>InsightFace</span>
+    <span class="accent">·</span>
+    <span>5-Point Landmark Alignment</span>
+    <span class="accent">·</span>
+    <span>WebFace600K Training</span>
+    <span class="accent">·</span>
+    <span>Equal Error Rate</span>
+    <span class="accent">·</span>
+    <span>Unknown Rejection</span>
+    <span class="accent">·</span>
+  </div>
+</div>
+
+
+<!-- ─── LIVE SYSTEM ─── -->
+<section id="live-system">
+
+  <!-- Status bar -->
+  <div class="ls-status-bar">
+    <div class="ls-status-dot loading" id="ls-dot"></div>
+    <span id="ls-status-text">Connecting to backend…</span>
+    <div class="ls-status-cmd">
+      Start backend: <strong>cd face-recognition-system &amp;&amp; python api.py</strong>
+    </div>
+    <div class="ls-enrolled-badge" id="ls-enrolled-badge" style="display:none">
+      <span id="ls-enrolled-count">0</span> enrolled
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="ls-tabs">
+    <button class="ls-tab-btn active" data-tab="enroll">
+      <span class="ls-tab-label">01</span>Enroll
+    </button>
+    <button class="ls-tab-btn" data-tab="identify">
+      <span class="ls-tab-label">02</span>Identify
+    </button>
+    <button class="ls-tab-btn" data-tab="database">
+      <span class="ls-tab-label">03</span>Database
+    </button>
+  </div>
+
+  <!-- ── ENROLL PANEL ── -->
+  <div class="ls-panel active" id="ls-panel-enroll">
+    <div class="ls-panel-grid">
+
+      <div class="ls-controls">
+        <div>
+          <span class="ls-field-label">Person Name</span>
+          <input class="ls-input" id="enroll-name" type="text"
+            placeholder="e.g. Alice_Smith" autocomplete="off" />
+        </div>
+
+        <div>
+          <span class="ls-field-label">Photos (3–10 recommended)</span>
+          <div class="ls-drop-zone" id="enroll-drop">
+            <input type="file" id="enroll-file" accept="image/*" multiple />
+            <div class="ls-drop-icon">↑</div>
+            <div class="ls-drop-text">Drop photos here or click to browse</div>
+            <div class="ls-drop-hint">JPG, PNG, WEBP · Multiple files supported</div>
+          </div>
+          <div class="ls-thumb-strip" id="enroll-thumbs"></div>
+        </div>
+
+        <!-- Webcam alternative -->
+        <button class="wc-trigger-btn" id="enroll-webcam-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M3 9a2 2 0 0 1 2-2h.93a2 2 0 0 0 1.664-.89l.812-1.22A2 2 0 0 1 10.07 4h3.86a2 2 0 0 1 1.664.89l.812 1.22A2 2 0 0 0 18.07 7H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+          </svg>
+          Use Webcam Instead
+        </button>
+
+        <button class="ls-btn ls-btn-accent" id="enroll-btn">Enroll Person</button>
+        <button class="ls-btn" id="enroll-clear-btn"
+          style="background:none;border:1px solid var(--border);color:var(--ink-60);">Clear</button>
+      </div>
+
+      <div class="ls-result-area">
+        <div class="ls-placeholder" id="enroll-placeholder">
+          <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+            <circle cx="20" cy="14" r="8" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M4 36c0-8.837 7.163-16 16-16s16 7.163 16 16" stroke="currentColor" stroke-width="1.5"/>
+          </svg>
+          <p>Enter a name and upload photos,<br>then click <strong>Enroll Person</strong>.</p>
+        </div>
+        <div id="enroll-result"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── IDENTIFY PANEL ── -->
+  <div class="ls-panel" id="ls-panel-identify">
+    <div class="ls-panel-grid">
+
+      <div class="ls-controls">
+        <div>
+          <span class="ls-field-label">Query Image</span>
+          <div class="ls-drop-zone" id="identify-drop" style="min-height:180px;">
+            <input type="file" id="identify-file" accept="image/*" />
+            <div class="ls-drop-icon" id="id-drop-icon">↑</div>
+            <div class="ls-drop-text" id="id-drop-text">Drop a photo here or click to browse</div>
+            <div class="ls-drop-hint">One image · Any format</div>
+          </div>
+          <div id="identify-preview-wrap" style="display:none;margin-top:0.5rem;">
+            <img id="identify-preview" style="width:100%;border:1px solid var(--border);" alt="Preview" />
+          </div>
+        </div>
+
+        <div class="ls-threshold-row">
+          <label>Threshold θ</label>
+          <input type="range" id="id-thresh-slider" min="0" max="1" step="0.01" value="0.35" />
+          <span class="ls-threshold-num" id="id-thresh-val">0.35</span>
+        </div>
+
+        <button class="ls-btn ls-btn-accent" id="identify-btn">Identify Faces</button>
+        <button class="ls-btn" id="id-clear-btn"
+          style="background:none;border:1px solid var(--border);color:var(--ink-60);">
+          Clear
+        </button>
+      </div>
+
+      <div class="ls-result-area">
+        <div class="ls-placeholder" id="identify-placeholder">
+          <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+            <rect x="4" y="4" width="32" height="32" rx="1" stroke="currentColor" stroke-width="1.5" stroke-dasharray="5 3"/>
+            <circle cx="15" cy="16" r="3" stroke="currentColor" stroke-width="1.5"/>
+            <circle cx="25" cy="16" r="3" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M13 26 Q20 32 27 26" stroke="currentColor" stroke-width="1.5"/>
+          </svg>
+          <p>Upload a photo and click <strong>Identify Faces</strong><br>to run ArcFace recognition.</p>
+        </div>
+        <div id="identify-result"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── DATABASE PANEL ── -->
+  <div class="ls-panel" id="ls-panel-database">
+    <div class="db-header">
+      <h3>Enrolled Persons</h3>
+      <div style="display:flex;gap:1rem;align-items:center;">
+        <span class="db-count" id="db-count-label">Loading…</span>
+        <button class="db-refresh-btn" id="db-refresh-btn">↻ Refresh</button>
+      </div>
+    </div>
+    <div id="db-persons-grid"></div>
+  </div>
+
+</section>
+
+<!-- Toast notification -->
+<div id="ls-toast"></div>
+
+<!-- ─── WEBCAM MODAL ─── -->
+<div id="webcam-modal">
+  <div class="wc-box">
+    <div class="wc-header">
+      <span class="wc-title">Live Webcam Capture · Enroll from Camera</span>
+      <button class="wc-close" id="wc-close-btn">&times;</button>
+    </div>
+
+    <video id="webcam-video" autoplay playsinline muted></video>
+
+    <div class="wc-controls">
+      <button class="wc-btn wc-btn-cap" id="wc-capture-btn">
+        Capture Frame <span class="wc-count-badge" id="wc-count">0 / 10</span>
+      </button>
+      <button class="wc-btn wc-btn-done" id="wc-done-btn" disabled>
+        Use These Frames
+      </button>
+    </div>
+
+    <div id="wc-thumbs"></div>
+    <div class="wc-status" id="wc-status">Point your camera at your face and click Capture.</div>
+  </div>
+</div>
+
+<!-- ─── INTRO ─── -->
+<section id="intro" class="alt">
+  <div class="container">
+    <div class="intro-grid reveal">
+      <div class="intro-label">The Problem</div>
+      <div class="intro-body">
+        <p class="large-quote">
+          A face is not a name. The challenge is building a system that
+          reliably bridges the gap — even under imperfect conditions.
+        </p>
+        <p>
+          <strong>Facera</strong> is a modular face recognition identification system built with
+          <strong>InsightFace</strong> and <strong>ONNX Runtime</strong>. Given a query image, it detects every face,
+          extracts a 512-dimensional ArcFace embedding, and compares it against an enrolled
+          database using cosine similarity.
+        </p>
+        <p>
+          When the best match score exceeds a configurable <strong>threshold</strong>, the person
+          is identified. When it does not, the face is rejected as <strong>Unknown</strong> — an
+          honest acknowledgement of the system's limits rather than a forced guess.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ─── PIPELINE ─── -->
+<section id="pipeline">
+  <div class="container">
+    <div class="pipeline-header reveal">
+      <h2>How it works.</h2>
+      <span class="label">Four-stage pipeline</span>
+    </div>
+
+    <div class="pipeline-steps">
+
+      <div class="step reveal">
+        <span class="step-num">01</span>
+        <div class="step-tag">Detect</div>
+        <h3>Face Detection</h3>
+        <p>RetinaFace scans the input image using a multi-scale Feature Pyramid Network.
+          It outputs bounding boxes and five facial landmark points per face —
+          regardless of scale or partial occlusion.</p>
+        <div class="step-tech">
+          <span>det_10g.onnx</span>
+          <span>det_score ≥ 0.50</span>
+          <span>640 × 640 input</span>
+        </div>
+      </div>
+
+      <div class="step reveal">
+        <span class="step-num">02</span>
+        <div class="step-tag">Align</div>
+        <h3>Landmark Alignment</h3>
+        <p>The five detected landmarks (eye centres, nose tip, mouth corners) drive an
+          affine warp that maps the face to a canonical 112 × 112 crop. Eyes and mouth
+          land at fixed pixel coordinates, removing pose variation.</p>
+        <div class="step-tech">
+          <span>112 × 112 crop</span>
+          <span>Affine transform</span>
+          <span>5-point geometry</span>
+        </div>
+      </div>
+
+      <div class="step reveal">
+        <span class="step-num">03</span>
+        <div class="step-tag">Embed</div>
+        <h3>ArcFace Embedding</h3>
+        <p>The aligned crop is fed to ArcFace-R50, a ResNet-50 trained with angular
+          margin loss on 600 K identities. The network outputs a 512-dimensional
+          vector, L2-normalised to unit length.</p>
+        <div class="step-tech">
+          <span>w600k_r50.onnx</span>
+          <span>512-d, L2-normed</span>
+          <span>WebFace600K</span>
+        </div>
+      </div>
+
+      <div class="step reveal">
+        <span class="step-num">04</span>
+        <div class="step-tag">Decide</div>
+        <h3>Threshold Decision</h3>
+        <p>Cosine similarity is computed against every enrolled embedding. The
+          highest scorer wins. If that score meets or exceeds the configured
+          threshold, the person is identified. Otherwise: <em>Unknown</em>.</p>
+        <div class="step-tech">
+          <span>cosine_sim = dot product</span>
+          <span>threshold: configurable</span>
+          <span>default: 0.35</span>
+        </div>
+      </div>
+
+    </div><!-- /pipeline-steps -->
+
+    <!-- Workflow arrow diagram -->
+    <div style="margin-top:3rem; padding:2rem; background:var(--white); border:1px solid var(--border); font-family:var(--mono); font-size:0.78rem; color:var(--ink-60); overflow-x:auto; white-space:nowrap;" class="reveal">
+      <span style="color:var(--ink)">Input Image</span>
+      &nbsp;→&nbsp;<span style="color:var(--ink)">RetinaFace</span>
+      &nbsp;→&nbsp;<span style="color:var(--ink)">Landmark Warp</span>
+      &nbsp;→&nbsp;<span style="color:var(--ink)">ArcFace-R50</span>
+      &nbsp;→&nbsp;<span style="color:var(--ink)">Cosine Similarity</span>
+      &nbsp;→&nbsp;<span style="color:var(--known)">Identified</span>
+      &nbsp;/&nbsp;<span style="color:var(--accent)">Unknown</span>
+    </div>
+
+  </div>
+</section>
+
+
+<!-- ─── DEMO ─── -->
+<section id="demo" class="alt">
+  <div class="container">
+    <div class="demo-header reveal">
+      <h2>Try it.</h2>
+      <p>Select a recognition scenario and drag the threshold slider to see how the
+        decision boundary changes in real time.</p>
+    </div>
+
+    <div class="demo-layout">
+
+      <!-- Left: scenario + query -->
+      <div class="demo-left">
+        <div class="scenario-label">Recognition scenario</div>
+        <div class="scenario-btns">
+          <button class="scenario-btn active" data-scenario="0">
+            High confidence match
+            <span class="score-hint">best: 0.82</span>
+          </button>
+          <button class="scenario-btn" data-scenario="1">
+            Borderline case
+            <span class="score-hint">best: 0.41</span>
+          </button>
+          <button class="scenario-btn" data-scenario="2">
+            Impostor (unknown)
+            <span class="score-hint">best: 0.28</span>
+          </button>
+        </div>
+
+        <div class="query-face-box">
+          <!-- Abstract face icon -->
+          <svg class="query-face-icon" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="1" y="1" width="78" height="78" stroke="#D1CCC4" stroke-width="1" stroke-dasharray="4 3"/>
+            <ellipse cx="40" cy="40" rx="22" ry="27" stroke="#1A1510" stroke-width="1.2"/>
+            <circle cx="32" cy="34" r="3.5" stroke="#1A1510" stroke-width="1.1"/>
+            <circle cx="48" cy="34" r="3.5" stroke="#1A1510" stroke-width="1.1"/>
+            <path d="M36 52 Q40 56 44 52" stroke="#1A1510" stroke-width="1.1"/>
+            <circle cx="32" cy="34" r="1.5" fill="#B03A24"/>
+            <circle cx="48" cy="34" r="1.5" fill="#B03A24"/>
+            <circle cx="40" cy="45" r="1.5" fill="#B03A24"/>
+            <circle cx="36" cy="52" r="1.5" fill="#B03A24"/>
+            <circle cx="44" cy="52" r="1.5" fill="#B03A24"/>
+          </svg>
+          <div class="query-label">Query face</div>
+          <div class="query-score-display" id="query-best-score">best sim: —</div>
+        </div>
+      </div>
+
+      <!-- Right: bars + result -->
+      <div class="demo-right">
+
+        <div class="threshold-control">
+          <label>Threshold θ</label>
+          <input type="range" id="demo-threshold" min="0" max="1" step="0.01" value="0.35"/>
+          <span class="threshold-value" id="demo-threshold-val">0.35</span>
+        </div>
+
+        <div class="persons-list" id="persons-list">
+          <!-- Populated by JS -->
+        </div>
+
+        <div class="demo-result">
+          <div class="result-label">Identification result</div>
+          <div class="result-name" id="demo-result-name">—</div>
+          <div class="result-meta" id="demo-result-meta"></div>
+          <span class="result-verdict" id="demo-result-verdict"></span>
+        </div>
+
+      </div>
+    </div><!-- /demo-layout -->
+  </div>
+</section>
+
+
+<!-- ─── ENROLLMENT ─── -->
+<section id="enrollment">
+  <div class="container">
+    <div class="enroll-grid">
+
+      <div class="enroll-left reveal">
+        <span class="eyebrow" style="margin-bottom:1.5rem;display:inline-block;">Enrollment</span>
+        <h2>Teaching the system a face.</h2>
+        <p style="margin-top:1.5rem;">
+          Enrollment extracts and aggregates ArcFace embeddings from multiple images
+          of one person, producing a single representative 512-d vector stored in the database.
+        </p>
+        <p>
+          More images reduce per-image noise — expression, lighting, and distance variation
+          all get averaged out into a stable identity signature.
+        </p>
+
+        <div class="enroll-detail reveal">
+          <h4>Aggregation Strategy</h4>
+          <p>Each per-image embedding is extracted individually, then averaged
+            (or median-reduced) and re-normalised. The database stores one
+            unit-norm vector per person — fast for lookup, robust from variation.</p>
+        </div>
+        <div class="enroll-detail reveal">
+          <h4>Recommendations</h4>
+          <div class="enroll-tips">
+            <div class="tip">Use 5–10 images per person for best robustness</div>
+            <div class="tip">Vary lighting, angle, and expression slightly</div>
+            <div class="tip">Ensure face is clearly visible, not blurred</div>
+            <div class="tip">Only the highest-confidence face per image is used</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="enroll-right reveal">
+        <div class="file-tree">
+          <div class="dir">data/enrolled/</div>
+          <div class="indent1 dir">Alice_Sharma/</div>
+          <div class="indent2 file">photo_01.jpg</div>
+          <div class="indent2 file">photo_02.jpg</div>
+          <div class="indent2 file">photo_03.jpg <span class="note">← 3–10 images</span></div>
+          <div class="indent1 dir">Ben_Fischer/</div>
+          <div class="indent2 file">img_01.jpg</div>
+          <div class="indent2 file">img_02.jpg</div>
+          <div class="indent1 dir">M_Okonkwo/</div>
+          <div class="indent2 file">face_01.jpg</div>
+          <div class="indent2 file">face_02.jpg</div>
+          <div class="indent2 file">face_03.jpg</div>
+        </div>
+
+        <div class="code-block">
+          <div><span class="cmt"># Build the embedding database</span></div>
+          <div><span class="prompt">$ </span><span class="cmd">python</span> main.py <span class="flag">enroll</span></div>
+          <div>&nbsp;</div>
+          <div><span class="cmt"># Or from a custom directory</span></div>
+          <div><span class="prompt">$ </span><span class="cmd">python</span> main.py <span class="flag">enroll</span> \</div>
+          <div>&nbsp;&nbsp;<span class="flag">--enrolled-dir</span> <span class="val">data/enrolled/</span></div>
+          <div>&nbsp;</div>
+          <div><span class="cmt"># Identify a face in a new photo</span></div>
+          <div><span class="prompt">$ </span><span class="cmd">python</span> main.py <span class="flag">identify</span> \</div>
+          <div>&nbsp;&nbsp;<span class="flag">-i</span> <span class="val">photo.jpg</span> <span class="flag">--show</span> <span class="flag">--verbose</span></div>
+          <div>&nbsp;</div>
+          <div><span class="cmt"># Launch Streamlit web dashboard</span></div>
+          <div><span class="prompt">$ </span><span class="cmd">streamlit</span> run app.py</div>
+        </div>
+
+        <div style="margin-top:1.5rem; padding:1rem; border:1px solid var(--border); background:var(--white);">
+          <div class="label" style="margin-bottom:0.8rem;">Aggregation formula</div>
+          <div style="font-family:var(--mono);font-size:0.82rem; color:var(--ink);">
+            <div>E<sub>enrolled</sub> = mean(E<sub>1</sub>, E<sub>2</sub>, ..., E<sub>N</sub>)</div>
+            <div style="margin-top:0.5rem;">E<sub>final</sub> = E<sub>enrolled</sub> / ‖E<sub>enrolled</sub>‖</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ─── THRESHOLD VISUALIZATION ─── -->
+<section id="threshold-viz" class="alt">
+  <div class="container">
+    <div class="thresh-grid">
+
+      <div class="thresh-left reveal">
+        <span class="eyebrow" style="margin-bottom:1.5rem;display:inline-block;">Threshold</span>
+        <h2>Finding the right cutoff.</h2>
+        <p style="margin-top:1.5rem;">
+          The threshold separates genuine pairs (same person, different images)
+          from impostor pairs (different people). No threshold is arbitrarily optimal —
+          it must be calibrated on your actual data.
+        </p>
+        <p>
+          The chart plots estimated probability density for each distribution.
+          Drag the threshold line to see how <strong>FAR</strong> (False Acceptance Rate)
+          and <strong>FRR</strong> (False Rejection Rate) trade off.
+        </p>
+
+        <div class="eer-note">
+          <p>The <strong>Equal Error Rate (EER)</strong> is the threshold where FAR = FRR —
+            the data-driven starting point. Run calibration to find it for your dataset.</p>
+          <div class="eer-cmd">$ python main.py calibrate</div>
+        </div>
+
+        <div style="margin-top:2rem; display:flex; gap:1.5rem;">
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <div style="width:14px;height:14px;background:rgba(45,96,64,0.6);border-radius:2px;"></div>
+            <span style="font-size:0.82rem;color:var(--ink-60);">Genuine pairs</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <div style="width:14px;height:14px;background:rgba(176,58,36,0.55);border-radius:2px;"></div>
+            <span style="font-size:0.82rem;color:var(--ink-60);">Impostor pairs</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="thresh-right reveal">
+        <div class="canvas-wrap">
+          <canvas id="dist-canvas" width="600" height="280"></canvas>
+          <div class="thresh-slider-row" style="margin-top:1rem;">
+            <label>Threshold θ</label>
+            <input type="range" id="thresh-slider" min="0.01" max="0.99" step="0.01" value="0.35"/>
+            <span class="t-val" id="thresh-val">0.35</span>
+          </div>
+        </div>
+
+        <div class="rate-grid">
+          <div class="rate-cell">
+            <div class="rate-name">FAR · False Acceptance Rate</div>
+            <div class="rate-val" id="far-val">—</div>
+            <div class="rate-desc">Impostors incorrectly accepted</div>
+          </div>
+          <div class="rate-cell">
+            <div class="rate-name">FRR · False Rejection Rate</div>
+            <div class="rate-val" id="frr-val">—</div>
+            <div class="rate-desc">Genuine users incorrectly rejected</div>
+          </div>
+          <div class="rate-cell" style="grid-column:1/-1;">
+            <div class="rate-name">EER threshold (estimated)</div>
+            <div style="font-family:var(--mono);font-size:1.1rem;color:var(--accent);" id="eer-val">—</div>
+            <div class="rate-desc">Equal Error Rate crossing point for these distributions</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ─── EVALUATION ─── -->
+<section id="evaluation">
+  <div class="container">
+
+    <div class="eval-top">
+      <h2>Evaluation.</h2>
+      <span class="illustrative-badge">Illustrative values · Run python main.py evaluate for actual results</span>
+    </div>
+
+    <!-- Big metric numbers -->
+    <div class="eval-metrics-grid reveal">
+      <div class="eval-metric">
+        <div class="m-label">Accuracy</div>
+        <div class="m-val">88.6<span style="font-size:1.8rem;color:var(--ink-60);">%</span></div>
+        <div class="m-desc">Correct identifications + correct rejections / total</div>
+      </div>
+      <div class="eval-metric">
+        <div class="m-label">Macro F1-Score</div>
+        <div class="m-val">0.871</div>
+        <div class="m-desc">Harmonic mean of macro precision and recall</div>
+      </div>
+      <div class="eval-metric">
+        <div class="m-label">FAR</div>
+        <div class="m-val" style="color:var(--accent);">5.4<span style="font-size:1.8rem;">%</span></div>
+        <div class="m-desc">False Acceptance Rate — impostors accepted</div>
+      </div>
+      <div class="eval-metric">
+        <div class="m-label">FRR</div>
+        <div class="m-val" style="color:var(--accent);">9.1<span style="font-size:1.8rem;">%</span></div>
+        <div class="m-desc">False Rejection Rate — genuine users rejected</div>
+      </div>
+    </div>
+
+    <!-- Per-metric bars -->
+    <div class="eval-bars-section reveal">
+      <div class="eval-bars-title">Per-metric breakdown · threshold = 0.35</div>
+      <div class="eval-bar-row" data-pct="88.6">
+        <div class="eval-bar-label">Accuracy</div>
+        <div class="eval-bar-track"><div class="eval-bar-fill"></div></div>
+        <div class="eval-bar-pct">88.6%</div>
+      </div>
+      <div class="eval-bar-row" data-pct="87.1">
+        <div class="eval-bar-label">Macro Precision</div>
+        <div class="eval-bar-track"><div class="eval-bar-fill"></div></div>
+        <div class="eval-bar-pct">87.1%</div>
+      </div>
+      <div class="eval-bar-row" data-pct="86.2">
+        <div class="eval-bar-label">Macro Recall</div>
+        <div class="eval-bar-track"><div class="eval-bar-fill"></div></div>
+        <div class="eval-bar-pct">86.2%</div>
+      </div>
+      <div class="eval-bar-row" data-pct="87.1">
+        <div class="eval-bar-label">Macro F1-Score</div>
+        <div class="eval-bar-track"><div class="eval-bar-fill"></div></div>
+        <div class="eval-bar-pct">87.1%</div>
+      </div>
+      <div class="eval-bar-row" data-pct="5.4">
+        <div class="eval-bar-label" style="color:var(--accent);">FAR</div>
+        <div class="eval-bar-track"><div class="eval-bar-fill far"></div></div>
+        <div class="eval-bar-pct">5.4%</div>
+      </div>
+      <div class="eval-bar-row" data-pct="9.1">
+        <div class="eval-bar-label" style="color:var(--accent);">FRR</div>
+        <div class="eval-bar-track"><div class="eval-bar-fill frr"></div></div>
+        <div class="eval-bar-pct">9.1%</div>
+      </div>
+    </div>
+
+    <!-- Count grid -->
+    <div class="eval-counts reveal">
+      <div class="eval-count-cell">
+        <div class="c-num good">74</div>
+        <div class="c-label">Correctly identified persons (TP)</div>
+      </div>
+      <div class="eval-count-cell">
+        <div class="c-num good">18</div>
+        <div class="c-label">Correctly rejected unknowns (TN)</div>
+      </div>
+      <div class="eval-count-cell">
+        <div class="c-num bad">13</div>
+        <div class="c-label">Errors (FP + FN combined)</div>
+      </div>
+    </div>
+
+    <p style="margin-top:1.5rem;font-size:0.82rem;color:var(--ink-60);font-family:var(--mono);">
+      * Illustrative values. Run <code style="background:var(--code-bg);padding:0.1em 0.4em;">python main.py evaluate</code>
+      for exact metrics computed from your test data. Results written to <code style="background:var(--code-bg);padding:0.1em 0.4em;">results/evaluation.csv</code>.
+    </p>
+
+  </div>
+</section>
+
+
+<!-- ─── FAILURE CASES ─── -->
+<section id="failures" class="alt">
+  <div class="container">
+    <div class="failures-header reveal">
+      <h2>Where it fails.</h2>
+      <p>An honest account of failure modes. Every production face recognition system
+        should document these — not hide them.</p>
+    </div>
+
+    <table class="failures-table reveal">
+      <thead>
+        <tr>
+          <th style="width:22%">Scenario</th>
+          <th style="width:15%">Detection</th>
+          <th style="width:18%">Identification</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><div class="scenario-name">Poor lighting</div></td>
+          <td><span class="status-pill status-fail">May fail</span></td>
+          <td><span class="status-pill status-fail">N/A</span></td>
+          <td><div class="failure-note">RetinaFace needs minimum pixel contrast. Very dark or overexposed images often produce no detections.</div></td>
+        </tr>
+        <tr>
+          <td><div class="scenario-name">Motion blur</div></td>
+          <td><span class="status-pill status-warn">Partial</span></td>
+          <td><span class="status-pill status-warn">Degraded</span></td>
+          <td><div class="failure-note">Blur corrupts the 112×112 crop fed to ArcFace, lowering embedding quality and similarity scores.</div></td>
+        </tr>
+        <tr>
+          <td><div class="scenario-name">Side profile (&gt;60° yaw)</div></td>
+          <td><span class="status-pill status-warn">Partial</span></td>
+          <td><span class="status-pill status-fail">Usually Unknown</span></td>
+          <td><div class="failure-note">ArcFace was trained on near-frontal images. Extreme yaw significantly degrades embedding quality.</div></td>
+        </tr>
+        <tr>
+          <td><div class="scenario-name">Face mask</div></td>
+          <td><span class="status-pill status-ok">Usually OK</span></td>
+          <td><span class="status-pill status-warn">Degraded</span></td>
+          <td><div class="failure-note">Eyes visible → landmark alignment still possible. But occluded mouth removes discriminative features.</div></td>
+        </tr>
+        <tr>
+          <td><div class="scenario-name">Very small face (&lt;30 px)</div></td>
+          <td><span class="status-pill status-fail">Fails</span></td>
+          <td><span class="status-pill status-fail">N/A</span></td>
+          <td><div class="failure-note">RetinaFace with 640×640 input has a practical minimum face size. Small faces at distance are missed.</div></td>
+        </tr>
+        <tr>
+          <td><div class="scenario-name">Multiple faces</div></td>
+          <td><span class="status-pill status-ok">All detected</span></td>
+          <td><span class="status-pill status-ok">Each processed</span></td>
+          <td><div class="failure-note">System correctly detects and identifies all faces independently. Handled correctly.</div></td>
+        </tr>
+        <tr>
+          <td><div class="scenario-name">Unknown person</div></td>
+          <td><span class="status-pill status-ok">Detected</span></td>
+          <td><span class="status-pill status-ok">Rejected</span></td>
+          <td><div class="failure-note">Threshold mechanism works as designed. Score below threshold → "Unknown" returned.</div></td>
+        </tr>
+        <tr>
+          <td><div class="scenario-name">Sunglasses</div></td>
+          <td><span class="status-pill status-warn">May detect</span></td>
+          <td><span class="status-pill status-fail">Severely degraded</span></td>
+          <td><div class="failure-note">Eye landmarks are critical for alignment. Sunglasses obstruct landmark estimation and corrupt the crop.</div></td>
+        </tr>
+        <tr>
+          <td><div class="scenario-name">Identical twins</div></td>
+          <td><span class="status-pill status-ok">Detected</span></td>
+          <td><span class="status-pill status-warn">May confuse</span></td>
+          <td><div class="failure-note">Near-identical ArcFace embeddings. Cosine similarity between twins is high enough to cross the threshold.</div></td>
+        </tr>
+        <tr>
+          <td><div class="scenario-name">Different expressions</div></td>
+          <td><span class="status-pill status-ok">Detected</span></td>
+          <td><span class="status-pill status-ok">Usually correct</span></td>
+          <td><div class="failure-note">ArcFace is reasonably robust to expression changes. Extreme expressions may reduce similarity slightly.</div></td>
+        </tr>
+      </tbody>
+    </table>
+
+  </div>
+</section>
+
+
+<!-- ─── IMPROVEMENTS ─── -->
+<section id="improvements">
+  <div class="container">
+    <div class="impr-grid">
+      <div class="impr-left reveal">
+        <span class="eyebrow" style="margin-bottom:1.5rem;display:inline-block;">Roadmap</span>
+        <h2>Future improvements.</h2>
+        <p style="margin-top:1rem;">
+          Every system has a version 2. These improvements would move Facera
+          from a research prototype toward a production-hardened system.
+        </p>
+      </div>
+
+      <div class="impr-list">
+        <div class="impr-item">
+          <div class="impr-idx">1</div>
+          <div class="impr-content">
+            <h4>Multiple embeddings per person</h4>
+            <p>Store N embeddings per enrolled person (one per image) and use
+              nearest-neighbour search across all, rather than a single aggregate vector.
+              Improves robustness to intra-class variation without losing accuracy.</p>
+          </div>
+        </div>
+        <div class="impr-item">
+          <div class="impr-idx">2</div>
+          <div class="impr-content">
+            <h4>Anti-spoofing (liveness detection)</h4>
+            <p>Add a passive liveness detection model (e.g. Mini-FASNet) to reject
+              printed photos, screen replays, and 2D masks before embedding extraction.
+              Critical for any security-facing deployment.</p>
+          </div>
+        </div>
+        <div class="impr-item">
+          <div class="impr-idx">3</div>
+          <div class="impr-content">
+            <h4>FAISS approximate nearest-neighbour search</h4>
+            <p>Replace O(N) linear scan with a FAISS index for sub-millisecond retrieval
+              across databases of tens of thousands of enrolled persons.</p>
+          </div>
+        </div>
+        <div class="impr-item">
+          <div class="impr-idx">4</div>
+          <div class="impr-content">
+            <h4>Profile and multi-pose support</h4>
+            <p>Integrate a separate profile-face embedder trained on multi-pose data,
+              or use 3D face fitting to synthesise frontal views from extreme angles
+              before embedding.</p>
+          </div>
+        </div>
+        <div class="impr-item">
+          <div class="impr-idx">5</div>
+          <div class="impr-content">
+            <h4>GPU acceleration</h4>
+            <p>Switch to <code style="font-family:var(--mono);font-size:0.85em;background:var(--code-bg);padding:0.1em 0.4em;">CUDAExecutionProvider</code>
+              in config.py for 10–50× faster inference. Enables real-time processing
+              of high-resolution video streams.</p>
+          </div>
+        </div>
+        <div class="impr-item">
+          <div class="impr-idx">6</div>
+          <div class="impr-content">
+            <h4>Incremental enrollment & drift adaptation</h4>
+            <p>Allow adding new images to an existing enrollment without rebuilding
+              the full database. Periodically update representative embeddings
+              to account for appearance changes over time (aging, hairstyle changes).</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ─── TECH SPECS ─── -->
+<section id="tech-specs">
+  <div class="container">
+    <div class="spec-header">
+      <h2>System Specs.</h2>
+      <span class="spec-eyebrow">Full technical reference</span>
+    </div>
+
+    <div class="specs-grid">
+      <div class="spec-cell">
+        <div class="s-label">Detection Model</div>
+        <div class="s-val">
+          <strong>RetinaFace</strong><br>
+          det_10g.onnx · FPN + SSH<br>
+          Input: 640×640 BGR<br>
+          Output: bbox + 5-pt landmarks
+        </div>
+      </div>
+      <div class="spec-cell">
+        <div class="s-label">Recognition Model</div>
+        <div class="s-val">
+          <strong>ArcFace-R50</strong><br>
+          w600k_r50.onnx · ResNet-50<br>
+          Trained on WebFace600K<br>
+          Output: 512-d L2-normed vector
+        </div>
+      </div>
+      <div class="spec-cell">
+        <div class="s-label">Inference Engine</div>
+        <div class="s-val">
+          <strong>ONNX Runtime 1.30</strong><br>
+          CPUExecutionProvider<br>
+          No GPU required<br>
+          buffalo_l model pack
+        </div>
+      </div>
+      <div class="spec-cell">
+        <div class="s-label">Similarity Metric</div>
+        <div class="s-val">
+          <strong>Cosine Similarity</strong><br>
+          ≡ dot product (L2-normed)<br>
+          Range: −1.0 to +1.0<br>
+          Default threshold: <strong>0.35</strong>
+        </div>
+      </div>
+      <div class="spec-cell">
+        <div class="s-label">Enrollment Strategy</div>
+        <div class="s-val">
+          <strong>Mean aggregation</strong><br>
+          N images → N embeddings<br>
+          Mean + re-normalise<br>
+          1 vector per identity stored
+        </div>
+      </div>
+      <div class="spec-cell">
+        <div class="s-label">Interfaces</div>
+        <div class="s-val">
+          <strong>CLI</strong> · main.py<br>
+          <strong>Web</strong> · Streamlit app.py<br>
+          <strong>Webcam</strong> · OpenCV live<br>
+          <strong>Demo</strong> · setup_demo.py
+        </div>
+      </div>
+    </div>
+
+    <div class="spec-commands">
+      <div class="spec-cmd-group">
+        <div class="cmd-label">Quick Start</div>
+        <code><span class="c"># Setup demo with LFW dataset</span></code>
+        <code><span class="k">python</span> setup_demo.py</code>
+        <code><span class="c"># Enroll your own people</span></code>
+        <code><span class="k">python</span> main.py <span class="v">enroll</span></code>
+        <code><span class="c"># Identify a face</span></code>
+        <code><span class="k">python</span> main.py <span class="v">identify</span> -i photo.jpg --show</code>
+      </div>
+      <div class="spec-cmd-group">
+        <div class="cmd-label">Evaluation &amp; Calibration</div>
+        <code><span class="c"># Full evaluation suite</span></code>
+        <code><span class="k">python</span> main.py <span class="v">evaluate</span></code>
+        <code><span class="c"># Find optimal EER threshold</span></code>
+        <code><span class="k">python</span> main.py <span class="v">calibrate</span></code>
+        <code><span class="c"># Launch web dashboard</span></code>
+        <code><span class="k">streamlit</span> run app.py</code>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ─── FOOTER ─── -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <div class="footer-brand">Face<span>ra</span></div>
+      <div class="footer-stack">
+        InsightFace 2.0 · ArcFace-R50 · ONNX Runtime 1.30 · OpenCV 5 · Python 3.13
+      </div>
+      <div class="footer-copy">
+        Face Recognition Identification System · Built for study
+      </div>
+    </div>
+  </div>
+</footer>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════════════════════════════════ -->
+<script>
+"use strict";
+
+/* ─── 1. NAV SCROLL EFFECT ─── */
+const nav = document.getElementById('main-nav');
+window.addEventListener('scroll', () => {
+  nav.classList.toggle('scrolled', window.scrollY > 40);
+}, { passive: true });
+
+
+/* ─── 2. SCROLL REVEAL ─── */
+const revealEls = document.querySelectorAll('.reveal, .impr-item');
+const revealObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.1, rootMargin: '0px 0px -60px 0px' });
+revealEls.forEach(el => revealObserver.observe(el));
+
+
+/* ─── 3. EVAL BARS ANIMATION ─── */
+const barObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.querySelectorAll('.eval-bar-row').forEach((row, i) => {
+        const pct = parseFloat(row.dataset.pct);
+        const fill = row.querySelector('.eval-bar-fill');
+        setTimeout(() => {
+          fill.style.width = pct + '%';
+        }, i * 120);
+      });
+      barObserver.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.2 });
+const evalBarsSection = document.querySelector('.eval-bars-section');
+if (evalBarsSection) barObserver.observe(evalBarsSection);
+
+
+/* ─── 4. GENERATE EMBEDDING VIZ IN SVG HERO ─── */
+(function buildEmbedViz() {
+  const g = document.getElementById('embed-viz');
+  if (!g) return;
+  const cols = 6, rows = 32, cw = 9, ch = 9, gap = 1;
+  // pseudo-random gradient pattern
+  const seed = [0.8,0.2,0.9,0.1,0.6,0.4,0.7,0.3,0.85,0.15,0.95,0.05,0.55,0.45,0.75,0.25,
+                0.65,0.35,0.5,0.5,0.88,0.12,0.72,0.28,0.42,0.58,0.93,0.07,0.38,0.62,0.81,0.19];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const v = seed[(r * cols + c) % seed.length];
+      const gray = Math.round(180 + v * 70);
+      // alternate with accent color
+      let fill;
+      if (v > 0.8) fill = '#B03A24';
+      else if (v > 0.65) fill = '#7A6E67';
+      else if (v < 0.15) fill = '#2D6040';
+      else fill = `rgb(${gray},${gray-8},${gray-16})`;
+      const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+      rect.setAttribute('x', c * (cw + gap));
+      rect.setAttribute('y', r * (ch + gap));
+      rect.setAttribute('width', cw);
+      rect.setAttribute('height', ch);
+      rect.setAttribute('fill', fill);
+      rect.setAttribute('opacity', '0.85');
+      rect.style.animationDelay = (Math.random() * 3).toFixed(2) + 's';
+      rect.classList.add('embed-bar');
+      g.appendChild(rect);
+    }
+  }
+})();
+
+
+/* ─── 5. INTERACTIVE DEMO ─── */
+const PERSONS = [
+  { name: 'A. Rahman',   color: '#5C7A52' },
+  { name: 'E. Fischer',  color: '#5C6A7A' },
+  { name: 'M. Okonkwo', color: '#7A5C6A' },
+  { name: 'S. Laurent',  color: '#7A6A5C' },
+];
+
+const SCENARIOS = [
+  { scores: [0.31, 0.19, 0.82, 0.24] },  // M. Okonkwo is the match
+  { scores: [0.22, 0.41, 0.27, 0.18] },  // E. Fischer borderline
+  { scores: [0.28, 0.21, 0.18, 0.23] },  // nobody matches
+];
+
+let currentScenario = 0;
+let demoThreshold = 0.35;
+
+function renderDemo() {
+  const scores = SCENARIOS[currentScenario].scores;
+  const maxScore = Math.max(...scores);
+  const maxIdx = scores.indexOf(maxScore);
+  const topPerson = PERSONS[maxIdx];
+
+  // Update query best score
+  document.getElementById('query-best-score').textContent = `best sim: ${maxScore.toFixed(4)}`;
+
+  // Render bars
+  const list = document.getElementById('persons-list');
+  list.innerHTML = '';
+  scores.forEach((score, i) => {
+    const person = PERSONS[i];
+    const isTop = i === maxIdx;
+    const isAbove = score >= demoThreshold;
+    const row = document.createElement('div');
+    row.className = 'person-row';
+    row.innerHTML = `
+      <div class="person-name">${person.name}</div>
+      <div class="sim-bar-wrap">
+        <div class="sim-bar ${isTop && isAbove ? 'top-score' : isAbove ? 'above-threshold' : ''}"
+             style="width:${score * 100}%"></div>
+      </div>
+      <div class="sim-score-val" style="color:${isTop ? '#1A1510' : ''};font-weight:${isTop?'600':'400'}">${score.toFixed(4)}</div>
+    `;
+    list.appendChild(row);
+  });
+
+  // Animate bars after insert
+  setTimeout(() => {
+    list.querySelectorAll('.sim-bar').forEach(b => b.style.transition = 'width 0.55s cubic-bezier(0.4,0,0.2,1)');
+  }, 20);
+
+  // Result
+  const resultName = document.getElementById('demo-result-name');
+  const resultMeta = document.getElementById('demo-result-meta');
+  const resultVerdict = document.getElementById('demo-result-verdict');
+
+  if (maxScore >= demoThreshold) {
+    resultName.textContent = topPerson.name;
+    resultName.className = 'result-name known';
+    resultMeta.textContent = `similarity: ${maxScore.toFixed(4)} · threshold: ${demoThreshold.toFixed(2)}`;
+    resultVerdict.textContent = '✓ Identified';
+    resultVerdict.className = 'result-verdict identified';
+  } else {
+    resultName.textContent = 'Unknown';
+    resultName.className = 'result-name unknown';
+    resultMeta.textContent = `best similarity: ${maxScore.toFixed(4)} · threshold: ${demoThreshold.toFixed(2)}`;
+    resultVerdict.textContent = '✗ Rejected';
+    resultVerdict.className = 'result-verdict rejected';
+  }
+}
+
+// Scenario buttons
+document.querySelectorAll('.scenario-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.scenario-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentScenario = parseInt(btn.dataset.scenario);
+    renderDemo();
+  });
+});
+
+// Threshold slider (demo)
+const demoThreshSlider = document.getElementById('demo-threshold');
+const demoThreshVal    = document.getElementById('demo-threshold-val');
+demoThreshSlider.addEventListener('input', () => {
+  demoThreshold = parseFloat(demoThreshSlider.value);
+  demoThreshVal.textContent = demoThreshold.toFixed(2);
+  renderDemo();
+});
+
+renderDemo();
+
+
+/* ─── 6. THRESHOLD CANVAS VISUALIZATION ─── */
+const canvas = document.getElementById('dist-canvas');
+const ctx    = canvas.getContext('2d');
+
+// Distributions: genuine ~ N(0.65, 0.11), impostor ~ N(0.18, 0.09)
+const G_MEAN = 0.65, G_STD = 0.11;
+const I_MEAN = 0.18, I_STD = 0.09;
+
+function normalPDF(x, mean, std) {
+  return (1 / (std * Math.sqrt(2 * Math.PI))) *
+    Math.exp(-0.5 * Math.pow((x - mean) / std, 2));
+}
+
+// Error function approximation (for CDF)
+function erf(x) {
+  const t = 1 / (1 + 0.3275911 * Math.abs(x));
+  const poly = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))));
+  const result = 1 - poly * Math.exp(-x * x);
+  return x >= 0 ? result : -result;
+}
+
+function normalCDF(x, mean, std) {
+  return 0.5 * (1 + erf((x - mean) / (std * Math.sqrt(2))));
+}
+
+let thresholdLine = 0.35;
+let eerThreshold  = null;
+
+function findEER() {
+  let minDiff = Infinity, eer = 0;
+  for (let t = 0; t <= 1; t += 0.001) {
+    const far = 1 - normalCDF(t, I_MEAN, I_STD);
+    const frr = normalCDF(t, G_MEAN, G_STD);
+    const diff = Math.abs(far - frr);
+    if (diff < minDiff) { minDiff = diff; eer = t; }
+  }
+  return eer;
+}
+eerThreshold = findEER();
+document.getElementById('eer-val').textContent = eerThreshold.toFixed(3);
+
+function drawDistCanvas(threshold) {
+  const W = canvas.width, H = canvas.height;
+  const PADDING = { top: 20, right: 20, bottom: 40, left: 44 };
+  const plotW = W - PADDING.left - PADDING.right;
+  const plotH = H - PADDING.top - PADDING.bottom;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Background
+  ctx.fillStyle = '#FAF8F4';
+  ctx.fillRect(0, 0, W, H);
+
+  // x axis: 0 to 1, y axis: density
+  const N = 400;
+  const dx = 1 / N;
+
+  // Compute max density for scale
+  let maxY = 0;
+  for (let i = 0; i <= N; i++) {
+    const x = i * dx;
+    const gy = normalPDF(x, G_MEAN, G_STD);
+    const iy = normalPDF(x, I_MEAN, I_STD);
+    if (gy > maxY) maxY = gy;
+    if (iy > maxY) maxY = iy;
+  }
+  maxY *= 1.15;
+
+  function toPixelX(v) { return PADDING.left + v * plotW; }
+  function toPixelY(v) { return PADDING.top + plotH - (v / maxY) * plotH; }
+
+  // Helper: draw filled area under curve
+  function drawArea(mean, std, color) {
+    ctx.beginPath();
+    ctx.moveTo(toPixelX(0), toPixelY(0));
+    for (let i = 0; i <= N; i++) {
+      const x = i * dx;
+      const y = normalPDF(x, mean, std);
+      ctx.lineTo(toPixelX(x), toPixelY(y));
+    }
+    ctx.lineTo(toPixelX(1), toPixelY(0));
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+
+  // Helper: draw curve stroke
+  function drawCurve(mean, std, color) {
+    ctx.beginPath();
+    for (let i = 0; i <= N; i++) {
+      const x = i * dx;
+      const y = normalPDF(x, mean, std);
+      i === 0 ? ctx.moveTo(toPixelX(x), toPixelY(y)) : ctx.lineTo(toPixelX(x), toPixelY(y));
+    }
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  // Draw areas
+  drawArea(I_MEAN, I_STD, 'rgba(176, 58, 36, 0.15)');
+  drawArea(G_MEAN, G_STD, 'rgba(45, 96, 64, 0.15)');
+
+  // Draw curves
+  drawCurve(I_MEAN, I_STD, 'rgba(176, 58, 36, 0.75)');
+  drawCurve(G_MEAN, G_STD, 'rgba(45, 96, 64, 0.75)');
+
+  // EER line (dashed, subtle)
+  if (eerThreshold !== null) {
+    ctx.beginPath();
+    ctx.setLineDash([4, 4]);
+    ctx.moveTo(toPixelX(eerThreshold), PADDING.top);
+    ctx.lineTo(toPixelX(eerThreshold), PADDING.top + plotH);
+    ctx.strokeStyle = 'rgba(176, 58, 36, 0.3)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = 'rgba(176, 58, 36, 0.55)';
+    ctx.font = '10px "JetBrains Mono", monospace';
+    ctx.fillText(`EER: ${eerThreshold.toFixed(3)}`, toPixelX(eerThreshold) + 4, PADDING.top + 14);
+  }
+
+  // Threshold line (solid)
+  const tx = toPixelX(threshold);
+  ctx.beginPath();
+  ctx.moveTo(tx, PADDING.top);
+  ctx.lineTo(tx, PADDING.top + plotH);
+  ctx.strokeStyle = '#1A1510';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([]);
+  ctx.stroke();
+
+  // Threshold label
+  ctx.fillStyle = '#1A1510';
+  ctx.font = 'bold 10px "JetBrains Mono", monospace';
+  const labelX = tx + 5;
+  ctx.fillText(`θ = ${threshold.toFixed(2)}`, labelX > W - 70 ? tx - 60 : labelX, PADDING.top + 26);
+
+  // Shade FAR region (impostors above threshold)
+  ctx.beginPath();
+  ctx.moveTo(tx, toPixelY(0));
+  for (let i = Math.round(threshold * N); i <= N; i++) {
+    const x = i * dx;
+    const y = normalPDF(x, I_MEAN, I_STD);
+    ctx.lineTo(toPixelX(x), toPixelY(y));
+  }
+  ctx.lineTo(toPixelX(1), toPixelY(0));
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(176, 58, 36, 0.3)';
+  ctx.fill();
+
+  // Shade FRR region (genuines below threshold)
+  ctx.beginPath();
+  ctx.moveTo(toPixelX(0), toPixelY(0));
+  for (let i = 0; i <= Math.round(threshold * N); i++) {
+    const x = i * dx;
+    const y = normalPDF(x, G_MEAN, G_STD);
+    ctx.lineTo(toPixelX(x), toPixelY(y));
+  }
+  ctx.lineTo(tx, toPixelY(0));
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(45, 96, 64, 0.2)';
+  ctx.fill();
+
+  // Axes
+  ctx.strokeStyle = '#D1CCC4';
+  ctx.lineWidth = 1;
+  // x axis
+  ctx.beginPath();
+  ctx.moveTo(PADDING.left, PADDING.top + plotH);
+  ctx.lineTo(PADDING.left + plotW, PADDING.top + plotH);
+  ctx.stroke();
+  // y axis
+  ctx.beginPath();
+  ctx.moveTo(PADDING.left, PADDING.top);
+  ctx.lineTo(PADDING.left, PADDING.top + plotH);
+  ctx.stroke();
+
+  // X axis labels
+  ctx.fillStyle = '#786E67';
+  ctx.font = '10px "JetBrains Mono", monospace';
+  ctx.textAlign = 'center';
+  [0, 0.2, 0.4, 0.6, 0.8, 1.0].forEach(v => {
+    ctx.fillText(v.toFixed(1), toPixelX(v), PADDING.top + plotH + 18);
+  });
+  ctx.fillText('Cosine Similarity', PADDING.left + plotW / 2, PADDING.top + plotH + 34);
+
+  // Update FAR/FRR display
+  const far = 1 - normalCDF(threshold, I_MEAN, I_STD);
+  const frr = normalCDF(threshold, G_MEAN, G_STD);
+  document.getElementById('far-val').textContent = (far * 100).toFixed(1) + '%';
+  document.getElementById('frr-val').textContent = (frr * 100).toFixed(1) + '%';
+}
+
+// Initial draw
+drawDistCanvas(thresholdLine);
+
+// Slider control
+const threshSlider = document.getElementById('thresh-slider');
+const threshValEl  = document.getElementById('thresh-val');
+threshSlider.addEventListener('input', () => {
+  thresholdLine = parseFloat(threshSlider.value);
+  threshValEl.textContent = thresholdLine.toFixed(2);
+  drawDistCanvas(thresholdLine);
+});
+
+// Redraw on resize
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => drawDistCanvas(thresholdLine), 200);
+});
+
+
+/* ─── 7. STAGGER IMPR ITEMS ─── */
+document.querySelectorAll('.impr-item').forEach((item, i) => {
+  item.style.transitionDelay = `${i * 0.1}s`;
+});
+
+
+/* ═══════════════════════════════════════════════════════════════
+   LIVE SYSTEM — Real face recognition via the Flask backend
+   API base: http://localhost:5000/api
+   Start: cd face-recognition-system && python api.py
+═══════════════════════════════════════════════════════════════ */
+
+const API = 'http://localhost:5000/api';
+
+// ── Toast helper ─────────────────────────────────────────────
+const $toast = document.getElementById('ls-toast');
+let toastTimer;
+function showToast(msg, type = '') {
+  $toast.textContent = msg;
+  $toast.className = 'show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { $toast.className = ''; }, 3500);
+}
+
+// ── Status bar ───────────────────────────────────────────────
+const $dot    = document.getElementById('ls-dot');
+const $stext  = document.getElementById('ls-status-text');
+const $badge  = document.getElementById('ls-enrolled-badge');
+const $bcount = document.getElementById('ls-enrolled-count');
+
+async function checkBackend() {
+  $dot.className = 'ls-status-dot loading';
+  $stext.textContent = 'Connecting to backend…';
+  $stext.className = '';
+  try {
+    const r = await fetch(API + '/health', { signal: AbortSignal.timeout(3000) });
+    const d = await r.json();
+    $dot.className = 'ls-status-dot online';
+    $stext.textContent = `Backend online · InsightFace ${d.model || ''} · ArcFace-R50`;
+    $stext.className = 'online';
+    $badge.style.display = 'flex';
+    $bcount.textContent = d.enrolled;
+    return d;
+  } catch {
+    $dot.className = 'ls-status-dot offline';
+    $stext.textContent = 'Backend offline — start with: python api.py';
+    $stext.className = 'offline';
+    $badge.style.display = 'none';
+    return null;
+  }
+}
+checkBackend();
+setInterval(checkBackend, 15000);  // re-check every 15 s
+
+// ── Tab switching ────────────────────────────────────────────
+document.querySelectorAll('.ls-tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.ls-tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.ls-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    const id = 'ls-panel-' + btn.dataset.tab;
+    document.getElementById(id).classList.add('active');
+    if (btn.dataset.tab === 'database') loadDatabasePanel();
+  });
+});
+
+// ── Image resize + base64 (speeds up upload ~3-4x) ─────────────
+/**
+ * Resize an image File to max 640px on the longest side,
+ * then return it as a base64 data-URL (JPEG @85% quality).
+ * This reduces payload from ~3-5 MB to ~60-120 KB per image,
+ * making enrollment 3-4x faster over localhost.
+ */
+function fileToBase64(file, maxPx = 640) {
+  return new Promise((resolve) => {
+    const img  = new Image();
+    const url  = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale  = Math.min(maxPx / img.width, maxPx / img.height, 1);
+      const canvas = document.createElement('canvas');
+      canvas.width  = Math.round(img.width  * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.src = url;
+  });
+}
+
+/** Same but for a raw base64 string already in memory (webcam frames). */
+function b64ToResizedB64(b64, maxPx = 640) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale  = Math.min(maxPx / img.width, maxPx / img.height, 1);
+      const canvas = document.createElement('canvas');
+      canvas.width  = Math.round(img.width  * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.src = b64;
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+//  ENROLL
+// ─────────────────────────────────────────────────────────────
+let enrollFiles = [];
+
+const $enrollDrop   = document.getElementById('enroll-drop');
+const $enrollFile   = document.getElementById('enroll-file');
+const $enrollThumbs = document.getElementById('enroll-thumbs');
+const $enrollBtn    = document.getElementById('enroll-btn');
+const $enrollResult = document.getElementById('enroll-result');
+const $enrollPH     = document.getElementById('enroll-placeholder');
+
+function updateEnrollThumbs() {
+  $enrollThumbs.innerHTML = '';
+  const show = enrollFiles.slice(0, 8);
+  show.forEach(f => {
+    const img = new Image();
+    img.className = 'ls-thumb';
+    img.src = URL.createObjectURL(f);
+    $enrollThumbs.appendChild(img);
+  });
+  if (enrollFiles.length > 8) {
+    const sp = document.createElement('span');
+    sp.className = 'ls-thumb-count';
+    sp.textContent = `+${enrollFiles.length - 8} more`;
+    $enrollThumbs.appendChild(sp);
+  }
+}
+
+$enrollFile.addEventListener('change', e => {
+  enrollFiles = [...e.target.files];
+  updateEnrollThumbs();
+});
+
+['dragover','dragleave','drop'].forEach(evt => {
+  $enrollDrop.addEventListener(evt, e => {
+    e.preventDefault();
+    if (evt === 'dragover')  $enrollDrop.classList.add('drag-over');
+    if (evt === 'dragleave') $enrollDrop.classList.remove('drag-over');
+    if (evt === 'drop') {
+      $enrollDrop.classList.remove('drag-over');
+      enrollFiles = [...e.dataTransfer.files].filter(f => f.type.startsWith('image/'));
+      updateEnrollThumbs();
+    }
+  });
+});
+
+document.getElementById('enroll-clear-btn').addEventListener('click', () => {
+  enrollFiles = [];
+  $enrollThumbs.innerHTML = '';
+  document.getElementById('enroll-name').value = '';
+  $enrollResult.innerHTML = '';
+  $enrollPH.style.display = 'flex';
+});
+
+$enrollBtn.addEventListener('click', async () => {
+  const name = document.getElementById('enroll-name').value.trim();
+  if (!name) { showToast('Enter a person name first.', 'bad'); return; }
+  if (!enrollFiles.length) { showToast('Upload at least one photo.', 'bad'); return; }
+
+  $enrollBtn.disabled = true;
+  $enrollBtn.innerHTML = '<span class="ls-spinner"></span>Enrolling…';
+  $enrollPH.style.display = 'none';
+  $enrollResult.innerHTML = '';
+
+  try {
+    const images = await Promise.all(enrollFiles.map(f => fileToBase64(f)));
+    const res = await fetch(API + '/enroll', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, images }),
+    });
+    const d = await res.json();
+
+    if (d.error) {
+      $enrollResult.innerHTML = `<div class="enroll-error"><p>❌ ${d.error}</p></div>`;
+      showToast(d.error, 'bad');
+    } else {
+      $enrollResult.innerHTML = `
+        <div class="enroll-success">
+          <div class="es-icon">✓</div>
+          <div class="es-name">${d.name}</div>
+          <div class="es-meta">
+            <span>Faces used: ${d.faces_used} / ${d.total_images} images</span>
+            <span>Embedding: ${d.embedding_dim}-dimensional vector</span>
+            <span>Total enrolled in database: ${d.total_enrolled} person${d.total_enrolled !== 1 ? 's' : ''}</span>
+          </div>
+        </div>`;
+      showToast(`✓ ${d.name} enrolled successfully.`, 'good');
+      $bcount.textContent = d.total_enrolled;
+    }
+  } catch {
+    $enrollResult.innerHTML = `<div class="enroll-error"><p>❌ Cannot reach backend. Make sure <code>python api.py</code> is running.</p></div>`;
+    showToast('Backend not reachable.', 'bad');
+  }
+
+  $enrollBtn.disabled = false;
+  $enrollBtn.textContent = 'Enroll Person';
+});
+
+// ─────────────────────────────────────────────────────────────
+//  IDENTIFY
+// ─────────────────────────────────────────────────────────────
+let identifyFile = null;
+let idThreshold  = 0.35;
+
+const $idDrop     = document.getElementById('identify-drop');
+const $idFile     = document.getElementById('identify-file');
+const $idPreview  = document.getElementById('identify-preview');
+const $idPrevWrap = document.getElementById('identify-preview-wrap');
+const $idBtn      = document.getElementById('identify-btn');
+const $idResult   = document.getElementById('identify-result');
+const $idPH       = document.getElementById('identify-placeholder');
+const $idThresh   = document.getElementById('id-thresh-slider');
+const $idThreshV  = document.getElementById('id-thresh-val');
+
+$idThresh.addEventListener('input', () => {
+  idThreshold = parseFloat($idThresh.value);
+  $idThreshV.textContent = idThreshold.toFixed(2);
+});
+
+function setIdentifyFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  identifyFile = file;
+  $idPreview.src = URL.createObjectURL(file);
+  $idPrevWrap.style.display = 'block';
+  document.getElementById('id-drop-icon').textContent = '✓';
+  document.getElementById('id-drop-text').textContent = file.name;
+}
+
+$idFile.addEventListener('change', e => setIdentifyFile(e.target.files[0]));
+
+['dragover','dragleave','drop'].forEach(evt => {
+  $idDrop.addEventListener(evt, e => {
+    e.preventDefault();
+    if (evt === 'dragover')  $idDrop.classList.add('drag-over');
+    if (evt === 'dragleave') $idDrop.classList.remove('drag-over');
+    if (evt === 'drop') {
+      $idDrop.classList.remove('drag-over');
+      const f = [...e.dataTransfer.files].find(f => f.type.startsWith('image/'));
+      if (f) setIdentifyFile(f);
+    }
+  });
+});
+
+document.getElementById('id-clear-btn').addEventListener('click', () => {
+  identifyFile = null;
+  $idPreview.src = '';
+  $idPrevWrap.style.display = 'none';
+  $idResult.innerHTML = '';
+  $idPH.style.display = 'flex';
+  document.getElementById('id-drop-icon').textContent = '↑';
+  document.getElementById('id-drop-text').textContent = 'Drop a photo here or click to browse';
+});
+
+$idBtn.addEventListener('click', async () => {
+  if (!identifyFile) { showToast('Upload a photo first.', 'bad'); return; }
+
+  $idBtn.disabled = true;
+  $idBtn.innerHTML = '<span class="ls-spinner"></span>Running ArcFace…';
+  $idPH.style.display = 'none';
+  $idResult.innerHTML = '';
+
+  try {
+    const b64 = await fileToBase64(identifyFile);
+    const res = await fetch(API + '/identify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: b64, threshold: idThreshold }),
+    });
+    const d = await res.json();
+
+    if (d.error) {
+      $idResult.innerHTML = `<div class="enroll-error"><p>❌ ${d.error}</p></div>`;
+      showToast(d.error, 'bad');
+    } else if (d.face_count === 0) {
+      $idResult.innerHTML = `<div class="id-no-faces">
+        <div style="font-size:1.5rem;margin-bottom:0.5rem;">○</div>
+        <div>No faces detected in this image.</div>
+        <div style="margin-top:0.4rem;font-size:0.72rem;opacity:0.6;">Ensure the face is clearly visible, well-lit, and at least 30 px wide.</div>
+      </div>`;
+    } else {
+      // Build result HTML
+      let html = '<div class="id-result-wrap">';
+
+      // Annotated image from backend
+      if (d.annotated_image) {
+        html += `<img class="id-annotated-img" src="data:image/jpeg;base64,${d.annotated_image}" alt="Result" />`;
+      }
+
+      html += '<div class="id-face-cards">';
+      d.faces.forEach((face, i) => {
+        const cls = face.is_known ? 'known' : 'unknown';
+        const nameClass = face.is_known ? 'known' : 'unknown';
+        const verdictCls = face.is_known ? 'ok' : 'unk';
+        const verdictText = face.is_known ? '✓ Identified' : '✗ Unknown';
+
+        // Score bars
+        const scores = Object.entries(face.all_scores);
+        const maxScore = Math.max(...scores.map(([,v]) => v));
+        let barsHtml = scores.map(([pname, score]) => {
+          const isTop = score === maxScore;
+          const unkCls = !face.is_known && isTop ? 'unknown-top' : '';
+          return `<div class="id-score-row">
+            <div class="id-score-name">${pname.replace(/_/g,' ')}</div>
+            <div class="id-score-bar-wrap">
+              <div class="id-score-bar ${isTop ? 'top' : ''} ${unkCls}"
+                   style="width:${Math.max(0, score) * 100}%"></div>
+            </div>
+            <div class="id-score-val">${score.toFixed(4)}</div>
+          </div>`;
+        }).join('');
+
+        html += `
+          <div class="id-face-card ${cls}">
+            <div class="id-face-header">
+              <div class="id-face-name ${nameClass}">${face.identity.replace(/_/g,' ')}</div>
+              <span class="id-verdict ${verdictCls}">${verdictText}</span>
+            </div>
+            <div style="font-family:var(--mono);font-size:0.72rem;color:var(--ink-60);margin-bottom:0.8rem;">
+              similarity: ${face.similarity.toFixed(5)}
+              &nbsp;·&nbsp; detection: ${face.detection_score.toFixed(3)}
+              &nbsp;·&nbsp; threshold: ${idThreshold.toFixed(2)}
+            </div>
+            <div class="id-scores">
+              <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-30);margin-bottom:0.5rem;">All Similarity Scores</div>
+              ${barsHtml}
+            </div>
+          </div>`;
+      });
+
+      html += '</div></div>';
+      $idResult.innerHTML = html;
+
+      const label = d.face_count === 1 ? '1 face processed.' : `${d.face_count} faces processed.`;
+      showToast(label, 'good');
+    }
+  } catch {
+    $idResult.innerHTML = `<div class="enroll-error"><p>❌ Cannot reach backend.</p></div>`;
+    showToast('Backend not reachable.', 'bad');
+  }
+
+  $idBtn.disabled = false;
+  $idBtn.textContent = 'Identify Faces';
+});
+
+// ─────────────────────────────────────────────────────────────
+//  DATABASE PANEL
+// ─────────────────────────────────────────────────────────────
+async function loadDatabasePanel() {
+  const $grid  = document.getElementById('db-persons-grid');
+  const $count = document.getElementById('db-count-label');
+  $grid.innerHTML = '<div class="db-empty">Loading…</div>';
+
+  try {
+    const r = await fetch(API + '/database');
+    const d = await r.json();
+    $count.textContent = `${d.count} person${d.count !== 1 ? 's' : ''} enrolled`;
+    $bcount.textContent = d.count;
+
+    if (!d.persons.length) {
+      $grid.innerHTML = '<div class="db-empty">No persons enrolled yet.<br>Go to the Enroll tab to add someone.</div>';
+      return;
+    }
+
+    $grid.innerHTML = `<div class="db-grid">${
+      d.persons.map(p => `
+        <div class="db-person-card">
+          <div class="db-person-name">${p.name.replace(/_/g,' ')}</div>
+          <div class="db-person-meta">
+            ${p.embedding_dim}-d embedding<br>
+            L2 norm: ${p.norm}
+          </div>
+          <button class="db-delete-btn" data-name="${p.name}">× Remove</button>
+        </div>`
+      ).join('')
+    }</div>`;
+
+    $grid.querySelectorAll('.db-delete-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const name = btn.dataset.name;
+        if (!confirm(`Remove "${name}" from the database?`)) return;
+        try {
+          const r = await fetch(`${API}/delete/${encodeURIComponent(name)}`, { method: 'DELETE' });
+          const d = await r.json();
+          if (d.success) {
+            showToast(`${name} removed.`, 'good');
+            loadDatabasePanel();
+          } else {
+            showToast(d.error || 'Delete failed.', 'bad');
+          }
+        } catch { showToast('Backend not reachable.', 'bad'); }
+      });
+    });
+  } catch {
+    $grid.innerHTML = '<div class="db-empty">Cannot reach backend.</div>';
+  }
+}
+
+document.getElementById('db-refresh-btn').addEventListener('click', loadDatabasePanel);
+
+
+// ─────────────────────────────────────────────────────────────
+//  WEBCAM ENROLLMENT
+// ─────────────────────────────────────────────────────────────
+const MAX_WC_FRAMES = 10;
+let wcStream      = null;   // MediaStream
+let wcFrames      = [];     // captured base64 strings
+
+const $wcModal    = document.getElementById('webcam-modal');
+const $wcVideo    = document.getElementById('webcam-video');
+const $wcCapture  = document.getElementById('wc-capture-btn');
+const $wcDone     = document.getElementById('wc-done-btn');
+const $wcClose    = document.getElementById('wc-close-btn');
+const $wcCount    = document.getElementById('wc-count');
+const $wcThumbs   = document.getElementById('wc-thumbs');
+const $wcStatus   = document.getElementById('wc-status');
+
+/** Open the webcam modal and start the camera stream. */
+async function openWebcam() {
+  wcFrames = [];
+  $wcThumbs.innerHTML = '';
+  $wcCount.textContent = '0 / ' + MAX_WC_FRAMES;
+  $wcDone.disabled = true;
+  $wcStatus.textContent = 'Requesting camera access…';
+
+  try {
+    wcStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: false,
+    });
+    $wcVideo.srcObject = wcStream;
+    $wcStatus.textContent = 'Camera ready. Point at your face and click Capture.';
+  } catch (err) {
+    $wcStatus.textContent = 'Camera error: ' + err.message;
+    return;
+  }
+
+  $wcModal.classList.add('open');
+}
+
+/** Stop all camera tracks and close the modal. */
+function closeWebcam() {
+  if (wcStream) { wcStream.getTracks().forEach(t => t.stop()); wcStream = null; }
+  $wcVideo.srcObject = null;
+  $wcModal.classList.remove('open');
+}
+
+/** Capture one frame from the live video into wcFrames. */
+function captureFrame() {
+  if (wcFrames.length >= MAX_WC_FRAMES) {
+    $wcStatus.textContent = `Maximum ${MAX_WC_FRAMES} frames reached.`;
+    return;
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width  = $wcVideo.videoWidth  || 640;
+  canvas.height = $wcVideo.videoHeight || 480;
+  canvas.getContext('2d').drawImage($wcVideo, 0, 0, canvas.width, canvas.height);
+  const b64 = canvas.toDataURL('image/jpeg', 0.85);
+  wcFrames.push(b64);
+
+  // Thumbnail
+  const img = new Image();
+  img.className = 'wc-thumb';
+  img.src = b64;
+  $wcThumbs.appendChild(img);
+
+  $wcCount.textContent = `${wcFrames.length} / ${MAX_WC_FRAMES}`;
+  $wcStatus.textContent = `${wcFrames.length} frame${wcFrames.length > 1 ? 's' : ''} captured. ${MAX_WC_FRAMES - wcFrames.length} remaining.`;
+  $wcDone.disabled = wcFrames.length < 1;
+
+  // Flash effect on video
+  $wcVideo.style.opacity = '0.3';
+  setTimeout(() => { $wcVideo.style.opacity = '1'; }, 120);
+}
+
+/** Transfer webcam frames into the enroll panel and close modal. */
+function useWebcamFrames() {
+  if (!wcFrames.length) { showToast('No frames captured.', 'bad'); return; }
+
+  // Display thumbnails in the enroll panel
+  $enrollThumbs.innerHTML = '';
+  wcFrames.slice(0, 8).forEach(b64 => {
+    const img = new Image();
+    img.className = 'ls-thumb';
+    img.src = b64;
+    $enrollThumbs.appendChild(img);
+  });
+  if (wcFrames.length > 8) {
+    const sp = document.createElement('span');
+    sp.className = 'ls-thumb-count';
+    sp.textContent = `+${wcFrames.length - 8} more`;
+    $enrollThumbs.appendChild(sp);
+  }
+
+  // Mark as webcam source so enroll handler uses wcFrames directly
+  document.getElementById('enroll-drop').dataset.source = 'webcam';
+  showToast(`${wcFrames.length} webcam frames ready. Click Enroll Person.`, 'good');
+  closeWebcam();
+}
+
+// Wire up webcam modal buttons
+document.getElementById('enroll-webcam-btn').addEventListener('click', openWebcam);
+$wcCapture.addEventListener('click', captureFrame);
+$wcDone.addEventListener('click', useWebcamFrames);
+$wcClose.addEventListener('click', closeWebcam);
+// Close on backdrop click
+$wcModal.addEventListener('click', e => { if (e.target === $wcModal) closeWebcam(); });
+// ESC key closes modal
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeWebcam(); });
+
+// Override enroll button to also handle webcam frames
+const _origEnrollClick = $enrollBtn.onclick;
+$enrollBtn.addEventListener('click', async () => {
+  const src = document.getElementById('enroll-drop').dataset.source;
+  if (src === 'webcam' && wcFrames.length) {
+    // Use cached webcam frames instead of file input
+    const name = document.getElementById('enroll-name').value.trim();
+    if (!name) { showToast('Enter a person name first.', 'bad'); return; }
+
+    $enrollBtn.disabled = true;
+    $enrollBtn.innerHTML = '<span class="ls-spinner"></span>Enrolling from webcam…';
+    $enrollPH.style.display = 'none';
+    $enrollResult.innerHTML = '';
+
+    try {
+      // Resize webcam frames before sending
+      const images = await Promise.all(wcFrames.map(b => b64ToResizedB64(b, 640)));
+      const res = await fetch(API + '/enroll', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, images }),
+      });
+      const d = await res.json();
+      if (d.error) {
+        $enrollResult.innerHTML = `<div class="enroll-error"><p>&#10060; ${d.error}</p></div>`;
+        showToast(d.error, 'bad');
+      } else {
+        $enrollResult.innerHTML = `
+          <div class="enroll-success">
+            <div class="es-icon">&#10003;</div>
+            <div class="es-name">${d.name}</div>
+            <div class="es-meta">
+              <span>Webcam frames used: ${d.faces_used} / ${d.total_images}</span>
+              <span>Embedding: ${d.embedding_dim}-dimensional vector</span>
+              <span>Total enrolled: ${d.total_enrolled} person${d.total_enrolled !== 1 ? 's' : ''}</span>
+            </div>
+          </div>`;
+        showToast(`${d.name} enrolled from webcam.`, 'good');
+        $bcount.textContent = d.total_enrolled;
+        // Clear webcam source flag
+        delete document.getElementById('enroll-drop').dataset.source;
+        wcFrames = [];
+      }
+    } catch {
+      $enrollResult.innerHTML = `<div class="enroll-error"><p>&#10060; Cannot reach backend.</p></div>`;
+      showToast('Backend not reachable.', 'bad');
+    }
+
+    $enrollBtn.disabled = false;
+    $enrollBtn.textContent = 'Enroll Person';
+  }
+  // If source is file, the existing click handler handles it
+}, { capture: false });
+
+// Also clear webcam source when user selects files normally
+$enrollFile.addEventListener('change', () => {
+  delete document.getElementById('enroll-drop').dataset.source;
+  wcFrames = [];
+});
+
+/* ─── 8. PAGE LOADER ─── */
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    document.getElementById('page-loader').classList.add('hidden');
+  }, 950);
+});
+
+
+
+
+
+
+/* ─── 9. SCROLL PROGRESS BAR ─── */
+const progressBar = document.getElementById('scroll-progress-bar');
+window.addEventListener('scroll', () => {
+  const total = document.documentElement.scrollHeight - window.innerHeight;
+  const pct   = (window.scrollY / total) * 100;
+  progressBar.style.width = pct + '%';
+}, { passive: true });
+
+
+/* ─── 10. ACTIVE NAV SECTION HIGHLIGHTING ─── */
+const sections   = document.querySelectorAll('section[id]');
+const navAnchors = document.querySelectorAll('.nav-links a');
+
+const sectionObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      const id = entry.target.id;
+      navAnchors.forEach(a => {
+        a.classList.toggle('active', a.getAttribute('href') === '#' + id);
+      });
+    }
+  });
+}, { rootMargin: '-50% 0px -50% 0px' });
+
+sections.forEach(s => sectionObserver.observe(s));
+
+
+/* ─── 11. SMOOTH SECTION BORDER REVEAL ─── */
+document.querySelectorAll('.step, .eval-metric, .spec-cell').forEach((el, i) => {
+  el.style.transitionDelay = `${i * 0.06}s`;
+});
+
+</script>
+</body>
+</html>
