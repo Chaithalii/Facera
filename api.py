@@ -20,6 +20,7 @@ via fetch() from the browser.
 
 import base64
 import logging
+import os
 import pickle
 import sys
 import threading
@@ -27,7 +28,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
 # Make src importable
@@ -42,7 +43,8 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-app = Flask(__name__)
+FACERA_DIR = Path(__file__).resolve().parent / "facera"
+app = Flask(__name__, static_folder=str(FACERA_DIR), static_url_path="")
 CORS(app, origins="*")   # Allow browser requests from file:// and localhost
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -153,6 +155,22 @@ def draw_results(img_bgr: np.ndarray, results: list) -> np.ndarray:
         cv2.putText(out, label, (x1 + 4, y1 - 4),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
     return out
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  Frontend Static Routes
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.route("/", methods=["GET"])
+def index():
+    return send_from_directory(str(FACERA_DIR), "index.html")
+
+@app.route("/<path:path>", methods=["GET"])
+def static_proxy(path):
+    target = FACERA_DIR / path
+    if target.exists() and target.is_file():
+        return send_from_directory(str(FACERA_DIR), path)
+    return jsonify({"error": "Not found"}), 404
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -327,15 +345,16 @@ def delete_person(name: str):
 # ──────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
     log.info("=" * 60)
-    log.info("  Facera API Server")
+    log.info("  Facera Web Application & API Server")
     log.info("  InsightFace · ArcFace-R50 · ONNX Runtime")
     log.info("=" * 60)
     log.info("Loading model on startup (first run downloads ~300 MB)…")
     get_model()
     refresh_database()
     log.info("Enrolled persons: %d", len(_database))
-    log.info("Server starting at http://localhost:5000")
-    log.info("Open facera/index.html in your browser.")
+    log.info("Server starting at http://127.0.0.1:%d", port)
+    log.info("Open http://127.0.0.1:%d/ in your browser.", port)
     log.info("=" * 60)
-    app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
+    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)

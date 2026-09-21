@@ -1,4 +1,4 @@
-# 🧠 Face Recognition Identification System
+# 🧠 Face Recognition Identification System (FACERA)
 
 A production-ready, end-to-end **Face Recognition Identification System** built with
 **InsightFace (ArcFace)**, **ONNX Runtime**, **OpenCV**, **Flask REST API**, and a modern **FACERA Web Interface**.
@@ -32,7 +32,9 @@ full evaluation reporting, live webcam capture & enrollment, and database manage
 21. [How to Enroll a Person](#21-how-to-enroll-a-person)
 22. [How to Run Recognition](#22-how-to-run-recognition)
 23. [How to Run Evaluation](#23-how-to-run-evaluation)
-24. [Project Structure](#24-project-structure)
+24. [Deployment Guide (Render & GitHub)](#24-deployment-guide-render--github)
+25. [Security & Privacy Disclaimer](#25-security--privacy-disclaimer)
+26. [Project Structure](#26-project-structure)
 
 ---
 
@@ -46,7 +48,7 @@ rejected as **"Unknown"**.
 The system provides multiple interfaces for interaction:
 
 - **FACERA Web Interface** (`facera/index.html`) — Custom, high-speed, responsive frontend UI featuring drag-and-drop file upload, live webcam enrollment modal, instant recognition breakdown, and enrolled database management.
-- **Flask REST API** (`api.py`) — Thread-safe, production-ready backend serving REST endpoints for enrollment, identification, database stats, and deletion.
+- **Flask REST API** (`api.py`) — Thread-safe backend serving the web interface and REST endpoints for enrollment, identification, database stats, and deletion.
 - **Streamlit Web Dashboard** (`app.py`) — Interactive 5-page analytics and visual dashboard.
 - **CLI** (`main.py`) — Command-line interface for `enroll`, `identify`, `evaluate`, `webcam`, `info`, and `calibrate` operations.
 - **Automated demo setup** (`setup_demo.py`) — Auto-downloads the LFW dataset via scikit-learn for evaluation.
@@ -62,7 +64,7 @@ The system provides multiple interfaces for interaction:
 | Embed faces | ArcFace-R50 (512-d, L2-normalised) |
 | Identify faces | Cosine similarity + threshold decision matrix |
 | Reject unknowns | Similarity < threshold → "Unknown" |
-| Serve web application | Flask REST API + client-side resized base64 data transfer |
+| Serve web application | Flask REST API serving `facera/index.html` on `GET /` |
 | Database management | View and delete enrolled identities in real-time via UI/API |
 | Evaluate accuracy | Accuracy, Precision, Recall, F1, FAR, FRR, EER calibration |
 | Document results | Full README, CSV outputs, confusion matrix, score distribution plots |
@@ -122,8 +124,9 @@ The system provides multiple interfaces for interaction:
 
 | Library / Tool | Version | Purpose |
 |----------------|---------|---------|
-| `Flask` | ≥ 3.0.0 | Lightweight REST API server (`api.py`) |
-| `flask-cors` | ≥ 4.0.0 | Cross-Origin Resource Sharing for web client |
+| `Flask` | ≥ 3.0.0 | Web application & REST API server (`api.py`) |
+| `gunicorn` | ≥ 21.2.0 | Production WSGI HTTP server |
+| `flask-cors` | ≥ 4.0.0 | Cross-Origin Resource Sharing handler |
 | `insightface` | ≥ 0.7.3 | Face analysis framework (detection + embedding) |
 | `onnxruntime` | ≥ 1.16.0 | CPU inference engine for ONNX models |
 | `opencv-python` | ≥ 4.8.0 | Image I/O, bounding box drawing, webcam capture |
@@ -272,23 +275,26 @@ meets or exceeds the threshold. Otherwise it returns `"Unknown"`.
 
 ## 12. Flask REST API (`api.py`)
 
-The Flask API provides headless backend services for external applications and web interfaces.
+The Flask API provides backend services and serves the FACERA web interface directly.
 
 ### Endpoints
 
-#### 1. `GET /api/health`
+#### 1. `GET /`
+- **Description:** Serves the FACERA web application interface (`facera/index.html`).
+
+#### 2. `GET /api/health`
 - **Description:** Checks server status, model readiness, and enrolled count.
 - **Response:**
   ```json
   {
     "status": "ok",
-    "model_loaded": true,
-    "enrolled_count": 5,
-    "enrolled_names": ["Aishwarya", "Priyanka", "chaith", "mingyu", "san"]
+    "model": "buffalo_l",
+    "enrolled": 5,
+    "persons": ["Aishwarya", "Priyanka", "chaith", "mingyu", "san"]
   }
   ```
 
-#### 2. `POST /api/enroll`
+#### 3. `POST /api/enroll`
 - **Description:** Enrolls a person with one or more base64-encoded image strings.
 - **Payload:**
   ```json
@@ -297,66 +303,15 @@ The Flask API provides headless backend services for external applications and w
     "images": ["data:image/jpeg;base64,...", "data:image/jpeg;base64,..."]
   }
   ```
-- **Response:**
-  ```json
-  {
-    "success": true,
-    "message": "Enrolled John_Doe with 2 images.",
-    "enrolled_count": 6
-  }
-  ```
 
-#### 3. `POST /api/identify`
+#### 4. `POST /api/identify`
 - **Description:** Identifies face(s) in a base64-encoded image and returns bounding box annotations and confidence breakdown.
-- **Payload:**
-  ```json
-  {
-    "image": "data:image/jpeg;base64,...",
-    "threshold": 0.35
-  }
-  ```
-- **Response:**
-  ```json
-  {
-    "face_count": 1,
-    "annotated_image": "base64_encoded_jpeg...",
-    "faces": [
-      {
-        "bbox": [120, 85, 310, 315],
-        "detection_score": 0.985,
-        "identity": "John_Doe",
-        "similarity": 0.6842,
-        "is_known": true,
-        "all_scores": {
-          "John_Doe": 0.6842,
-          "Alice": 0.1210
-        }
-      }
-    ]
-  }
-  ```
 
-#### 4. `GET /api/database`
+#### 5. `GET /api/database`
 - **Description:** Lists database status and all enrolled persons.
-- **Response:**
-  ```json
-  {
-    "enrolled_count": 5,
-    "persons": [
-      { "name": "John_Doe", "image_count": 3 }
-    ]
-  }
-  ```
 
-#### 5. `DELETE /api/database/<person_name>`
+#### 6. `DELETE /api/delete/<person_name>`
 - **Description:** Removes an enrolled person from memory and deletes their folder on disk.
-- **Response:**
-  ```json
-  {
-    "success": true,
-    "message": "Deleted John_Doe from database."
-  }
-  ```
 
 ---
 
@@ -379,13 +334,7 @@ The Flask API provides headless backend services for external applications and w
 face-recognition-system/
 ├── data/
 │   ├── enrolled/               ← Enrolled persons (one directory per identity)
-│   │   ├── Person_A/
-│   │   │   ├── photo1.jpg
-│   │   │   └── photo2.jpg
-│   │   └── Person_B/
 │   └── test/                   ← Evaluation test dataset
-│       ├── Person_A/
-│       └── Unknown/            ← Impostor samples for rejection evaluation
 ├── embeddings/
 │   └── database.pkl            ← Serialised face embedding database
 ├── facera/
@@ -445,14 +394,6 @@ Below are the benchmark evaluation results evaluated on the system benchmark sui
 └────────────────────────────────────────┴────────┘
 ```
 
-> **Why TP was 0 previously:** If custom users are enrolled in `database.pkl` without putting corresponding test image folders inside `data/test/`, the system evaluates those test folders as non-enrolled subjects, resulting in 100% rejection (which correctly yields **0.00% False Acceptance Rate (FAR)**). When the test set identities are enrolled in `database.pkl`, the system achieves **95.24% Accuracy**, **14 True Positives**, and **0 False Positives**.
-
-Evaluation artifacts exported to `results/`:
-- `results/evaluation.csv` — Per-image prediction and similarity table.
-- `results/plots/confusion_matrix.png` — Heatmap matrix visualization.
-- `results/plots/similarity_distribution.png` — Similarity score distribution plot.
-- `results/plots/far_frr_curve.png` — Threshold vs error rate trade-off curve.
-
 ---
 
 ## 17. Failure Cases
@@ -498,7 +439,7 @@ The table below documents system performance and behavior under challenging envi
 ## 20. Installation & Quickstart Instructions
 
 ### 1. Prerequisites
-- Python 3.9+
+- Python 3.9 – 3.11
 - Internet connection (for first-run model download ~300 MB)
 
 ### 2. Setup Environment & Install Dependencies
@@ -517,64 +458,32 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 3. Launching the System
+### 3. Launching the System Locally
 
-#### Option A: FACERA Web Application (Recommended)
-1. Start the Flask REST API:
-   ```bash
-   python api.py
-   ```
-2. Open `facera/index.html` in your web browser.
-
-#### Option B: Streamlit Web Dashboard
 ```bash
-streamlit run app.py
+python api.py
 ```
-
-#### Option C: Command Line Interface (CLI)
-```bash
-python main.py --help
-```
+Open your web browser and navigate to:
+**`http://127.0.0.1:5000/`**
 
 ---
 
 ## 21. How to Enroll a Person
 
-### Option A: Via FACERA Web UI (Webcam or File Upload)
-1. Open `facera/index.html` in your browser (ensure `python api.py` is running).
-2. Go to tab **01 Enroll**.
+1. Open `http://127.0.0.1:5000/` in your browser.
+2. Navigate to tab **01 Enroll**.
 3. Enter the person's name (e.g., `Jane_Doe`).
 4. Select photos from your computer **OR** click **Use Webcam Instead** to capture frames live.
 5. Click **Enroll Person**.
-
-### Option B: Via Directory CLI
-1. Place image files inside `data/enrolled/<Person_Name>/`.
-2. Run:
-   ```bash
-   python main.py enroll
-   ```
 
 ---
 
 ## 22. How to Run Recognition
 
-### Option A: Via FACERA Web UI
-1. Go to tab **02 Identify** in `facera/index.html`.
+1. Go to tab **02 Identify** at `http://127.0.0.1:5000/`.
 2. Drag & drop an image or click to select a photo.
 3. Adjust the threshold slider if needed.
 4. Click **Identify Faces** to view bounding boxes and similarity scores.
-
-### Option B: Via CLI
-```bash
-# Basic identification
-python main.py identify --image path/to/photo.jpg
-
-# Show GUI window with annotations
-python main.py identify --image photo.jpg --show
-
-# Live webcam recognition stream
-python main.py webcam
-```
 
 ---
 
@@ -586,27 +495,66 @@ python main.py evaluate
 
 # Calibrate EER threshold
 python main.py calibrate
-
-# View enrolled identities list
-python main.py info
 ```
 
 ---
 
-## 24. Project Structure
+## 24. Deployment Guide (Render & GitHub)
+
+### GitHub Repository:
+The complete source code is hosted on GitHub:
+**`https://github.com/Chaithalii/Facera.git`**
+
+### Render Deployment Configuration:
+
+To deploy FACERA on [Render](https://render.com):
+
+1. **Connect GitHub:** Sign in to Render and click **New +** -> **Web Service**. Connect your GitHub repository (`Chaithalii/Facera`).
+2. **Environment & Branch:**
+   - **Environment:** `Python 3`
+   - **Branch:** `main`
+   - **Root Directory:** *(leave blank for repository root)*
+3. **Build & Start Commands:**
+   - **Build Command:**
+     ```bash
+     pip install -r requirements.txt
+     ```
+   - **Start Command:**
+     ```bash
+     gunicorn api:app
+     ```
+4. **Deploy:** Click **Create Web Service**.
+
+> **Note on Cold Starts & First Run:** On Render's free tier, the first request may take ~20-30 seconds if the instance has spun down due to inactivity or if InsightFace is downloading model weights (`buffalo_l` ~300 MB) on initial boot.
+
+---
+
+## 25. Security & Privacy Disclaimer
+
+> ⚠️ **Biometric Data & Academic Demonstration Notice:**
+> This repository is an academic / demonstration face recognition project. Face images and vector embeddings constitute **sensitive biometric personal data**.
+>
+> - **Privacy Enforcement:** Personal face image files (`data/enrolled/`) and compiled biometric database files (`embeddings/database.pkl`) are excluded from Git version control via `.gitignore`.
+> - **Production Usage:** This project is intended for educational, research, and demonstration purposes. Additional presentation attack detection (liveness detection) and encrypted storage should be implemented before deploying for high-security applications.
+
+---
+
+## 26. Project Structure
 
 ```
 face-recognition-system/
 │
-├── api.py                      ← Flask REST API backend server
+├── api.py                      ← Flask Web Application & REST API entry point
 ├── app.py                      ← Streamlit web dashboard interface
 ├── main.py                     ← Unified CLI entrypoint
 ├── setup_demo.py               ← LFW dataset download & demo setup script
-├── requirements.txt            ← Python dependencies
+├── requirements.txt            ← Python dependencies (including Gunicorn & Flask)
+├── .python-version             ← Python version specification (3.11.9)
+├── .gitignore                  ← Privacy & cache exclusions
 ├── README.md                   ← Project documentation
 │
 ├── facera/
-│   └── index.html              ← Modern FACERA web application
+│   └── index.html              ← FACERA web application interface
 │
 ├── src/
 │   ├── __init__.py
@@ -617,11 +565,11 @@ face-recognition-system/
 │   └── evaluate.py             ← Benchmark evaluation & plot generation
 │
 ├── data/
-│   ├── enrolled/               ← Persistent enrollment image folders
-│   └── test/                   ← Evaluation test image sets
+│   ├── enrolled/               ← Local enrollment image folders (gitignored)
+│   └── test/                   ← Local evaluation test image sets (gitignored)
 │
 ├── embeddings/
-│   └── database.pkl            ← Binary pickled vector embeddings database
+│   └── database.pkl            ← Binary pickled vector embeddings database (gitignored)
 │
 └── results/
     ├── evaluation.csv          ← Detailed evaluation outputs

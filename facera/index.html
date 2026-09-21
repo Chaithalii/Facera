@@ -3350,7 +3350,7 @@ document.querySelectorAll('.impr-item').forEach((item, i) => {
    Start: cd face-recognition-system && python api.py
 ═══════════════════════════════════════════════════════════════ */
 
-const API = 'http://localhost:5000/api';
+const API = (window.location.protocol === 'file:') ? 'http://localhost:5000/api' : '/api';
 
 // ── Toast helper ─────────────────────────────────────────────
 const $toast = document.getElementById('ls-toast');

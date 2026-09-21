@@ -20,5 +20,18 @@ ENV/
 .insightface/
 scikit_learn_data/
 
+# Biometric Data & Enrolled Images (Privacy & Security)
+embeddings/*.pkl
+!embeddings/.gitkeep
+data/enrolled/*
+!data/enrolled/.gitkeep
+data/test/*
+!data/test/.gitkeep
+results/*.csv
+results/plots/*
+!results/plots/.gitkeep
+
 # Temporary / OS files
 Thumbs.db
+.env
+*.log
