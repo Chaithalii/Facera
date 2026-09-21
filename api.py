@@ -353,10 +353,18 @@ def delete_person(name: str):
 # ──────────────────────────────────────────────────────────────────────────────
 #  Module-level Startup  (runs under BOTH `python api.py` AND gunicorn api:app)
 # ──────────────────────────────────────────────────────────────────────────────
-# Gunicorn imports this module directly and never executes __main__, so we MUST
-# seed the database here, at module level, after all functions are defined.
-refresh_database()
-log.info("Module startup: %d person(s) loaded into database.", len(_database))
+# Gunicorn imports this module and never runs __main__, so startup must happen
+# here.  We pre-load the model in a background thread so Gunicorn's worker
+# doesn't block (and time out) while InsightFace downloads ~300 MB on first run.
+
+def _startup():
+    log.info("=== Facera startup: loading model and database ===")
+    get_model()          # download + load InsightFace buffalo_l (once)
+    refresh_database()   # seed from demo_database.pkl if live DB is empty
+    log.info("=== Startup complete: %d person(s) in database ===", len(_database))
+
+_startup_thread = threading.Thread(target=_startup, daemon=True, name="facera-startup")
+_startup_thread.start()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
