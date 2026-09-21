@@ -3373,7 +3373,7 @@ async function checkBackend() {
   $stext.textContent = 'Connecting to backend…';
   $stext.className = '';
   try {
-    const r = await fetch(API + '/health', { signal: AbortSignal.timeout(3000) });
+    const r = await fetch(API + '/health', { signal: AbortSignal.timeout(15000) });
     const d = await r.json();
     $dot.className = 'ls-status-dot online';
     $stext.textContent = `Backend online · InsightFace ${d.model || ''} · ArcFace-R50`;
@@ -3383,7 +3383,7 @@ async function checkBackend() {
     return d;
   } catch {
     $dot.className = 'ls-status-dot offline';
-    $stext.textContent = 'Backend offline — start with: python api.py';
+    $stext.textContent = 'Backend connecting / waking up…';
     $stext.className = 'offline';
     $badge.style.display = 'none';
     return null;

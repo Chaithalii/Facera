@@ -98,6 +98,16 @@ def refresh_database() -> dict:
     """
     global _database
     _database = _load_db_from_disk()
+    if not _database:
+        seed_path = cfg.ROOT_DIR / "embeddings" / "demo_database.pkl"
+        if seed_path.exists():
+            try:
+                with open(seed_path, "rb") as f:
+                    _database = pickle.load(f)
+                _save_db_to_disk(_database)
+                log.info("Initialized database from seed demo database (%d persons).", len(_database))
+            except Exception as exc:
+                log.warning("Could not load seed database: %s", exc)
     log.info("Loaded %d persons from database.", len(_database))
     return _database
 

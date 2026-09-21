@@ -23,6 +23,7 @@ scikit_learn_data/
 # Biometric Data & Enrolled Images (Privacy & Security)
 embeddings/*.pkl
 !embeddings/.gitkeep
+!embeddings/demo_database.pkl
 data/enrolled/*
 !data/enrolled/.gitkeep
 data/test/*
