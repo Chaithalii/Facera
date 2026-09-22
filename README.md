@@ -1,4 +1,4 @@
-# 🧠 Face Recognition Identification System (FACERA)
+#  Face Recognition Identification System (FACERA)
 
 A production-ready, end-to-end **Face Recognition Identification System** built with
 **InsightFace (ArcFace)**, **ONNX Runtime**, **OpenCV**, **Flask REST API**, and a modern **FACERA Web Interface**.
@@ -12,7 +12,7 @@ backend : python api.py
 
 ---
 
-## 📋 Table of Contents
+##  Table of Contents
 
 1. [Project Overview](#1-project-overview)
 2. [Objective](#2-objective)
@@ -407,15 +407,15 @@ The table below documents system performance and behavior under challenging envi
 
 | Scenario / Challenge | Detection Status | Identification Impact | Expected Outcome | System Mitigation / Notes |
 |----------------------|------------------|-----------------------|------------------|---------------------------|
-| **Poor Lighting / Very Dark** | ❌ May Fail | — | No face detected | RetinaFace requires minimum pixel contrast; recommend supplementary illumination. |
-| **Severe Motion Blur** | ⚠️ Degraded | 📉 Reduced Similarity | Lower score | Landmark alignment degraded by blur; system rejects low-confidence faces. |
-| **Extreme Head Pose (>45° Yaw)** | ⚠️ Partial | 📉 Lower Similarity | Usually "Unknown" | ArcFace trained primarily on near-frontal faces; side profiles drop in cosine score. |
-| **Facial Masks / Obscured Mouth** | ✅ Detected | ⚠️ Minor Drop | Usually Identified | Eyes & nose bridge landmarks remain visible for 5-point affine warp. |
-| **Sunglasses / Obscured Eyes** | ❌ Fails | ❌ Degraded | Often "Unknown" | Eye positions are critical for face alignment; obscuring eyes impairs warping. |
-| **Distance / Small Face (<30px)** | ❌ Fails | — | No face detected | RetinaFace 640×640 input resolution limits minimum face bounding size. |
-| **Multiple Faces in Frame** | ✅ Detected All | ✅ Independent ID | Multiple bounding boxes | System detects all faces concurrently and runs identification on each separately. |
-| **Unknown Impostor Individual** | ✅ Detected | 🛡️ Rejection | Returns "Unknown" | Rejection mechanism successfully triggers when similarity score $< \theta$. |
-| **Identical Twins / Close Relatives** | ✅ Detected | ⚠️ Confusion | High Similarity | ArcFace embeddings are extremely close for identical twins; requires additional biometrics. |
+| **Poor Lighting / Very Dark** |  May Fail | — | No face detected | RetinaFace requires minimum pixel contrast; recommend supplementary illumination. |
+| **Severe Motion Blur** |  Degraded |  Reduced Similarity | Lower score | Landmark alignment degraded by blur; system rejects low-confidence faces. |
+| **Extreme Head Pose (>45° Yaw)** |  Partial |  Lower Similarity | Usually "Unknown" | ArcFace trained primarily on near-frontal faces; side profiles drop in cosine score. |
+| **Facial Masks / Obscured Mouth** |  Detected |  Minor Drop | Usually Identified | Eyes & nose bridge landmarks remain visible for 5-point affine warp. |
+| **Sunglasses / Obscured Eyes** |  Fails |  Degraded | Often "Unknown" | Eye positions are critical for face alignment; obscuring eyes impairs warping. |
+| **Distance / Small Face (<30px)** |  Fails | — | No face detected | RetinaFace 640×640 input resolution limits minimum face bounding size. |
+| **Multiple Faces in Frame** |  Detected All |  Independent ID | Multiple bounding boxes | System detects all faces concurrently and runs identification on each separately. |
+| **Unknown Impostor Individual** |  Detected |  Rejection | Returns "Unknown" | Rejection mechanism successfully triggers when similarity score $< \theta$. |
+| **Identical Twins / Close Relatives** |  Detected |  Confusion | High Similarity | ArcFace embeddings are extremely close for identical twins; requires additional biometrics. |
 
 ---
 
@@ -536,7 +536,7 @@ To deploy FACERA on [Render](https://render.com):
 
 ## 25. Security & Privacy Disclaimer
 
-> ⚠️ **Biometric Data & Academic Demonstration Notice:**
+>  **Biometric Data & Academic Demonstration Notice:**
 > This repository is an academic / demonstration face recognition project. Face images and vector embeddings constitute **sensitive biometric personal data**.
 >
 > - **Privacy Enforcement:** Personal face image files (`data/enrolled/`) and compiled biometric database files (`embeddings/database.pkl`) are excluded from Git version control via `.gitignore`.
