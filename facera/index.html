@@ -2134,12 +2134,12 @@
         </div>
 
         <div>
-          <span class="ls-field-label">Photos (3–10 recommended)</span>
+          <span class="ls-field-label">Photos (1–5 recommended · more = better accuracy)</span>
           <div class="ls-drop-zone" id="enroll-drop">
             <input type="file" id="enroll-file" accept="image/*" multiple />
             <div class="ls-drop-icon">↑</div>
             <div class="ls-drop-text">Drop photos here or click to browse</div>
-            <div class="ls-drop-hint">JPG, PNG, WEBP · Multiple files supported</div>
+            <div class="ls-drop-hint" id="enroll-drop-hint">JPG, PNG, WEBP · Click again to add more · Max 5 photos</div>
           </div>
           <div class="ls-thumb-strip" id="enroll-thumbs"></div>
         </div>
@@ -3448,6 +3448,7 @@ function b64ToResizedB64(b64, maxPx = 640) {
 //  ENROLL
 // ─────────────────────────────────────────────────────────────
 let enrollFiles = [];
+const MAX_ENROLL = 5;
 
 const $enrollDrop   = document.getElementById('enroll-drop');
 const $enrollFile   = document.getElementById('enroll-file');
@@ -3455,27 +3456,74 @@ const $enrollThumbs = document.getElementById('enroll-thumbs');
 const $enrollBtn    = document.getElementById('enroll-btn');
 const $enrollResult = document.getElementById('enroll-result');
 const $enrollPH     = document.getElementById('enroll-placeholder');
+const $enrollHint   = document.getElementById('enroll-drop-hint');
 
 function updateEnrollThumbs() {
   $enrollThumbs.innerHTML = '';
-  const show = enrollFiles.slice(0, 8);
-  show.forEach(f => {
+  enrollFiles.forEach((f, i) => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:relative;display:inline-block;';
+
     const img = new Image();
     img.className = 'ls-thumb';
     img.src = URL.createObjectURL(f);
-    $enrollThumbs.appendChild(img);
+    img.title = f.name;
+
+    // ✕ remove button on each thumbnail
+    const rm = document.createElement('button');
+    rm.textContent = '✕';
+    rm.title = 'Remove this photo';
+    rm.style.cssText = `
+      position:absolute;top:-5px;right:-5px;
+      width:18px;height:18px;border-radius:50%;
+      background:#CF5B4A;color:#fff;border:none;
+      font-size:10px;line-height:18px;text-align:center;
+      cursor:pointer;padding:0;z-index:2;
+    `;
+    rm.addEventListener('click', (e) => {
+      e.stopPropagation();
+      enrollFiles.splice(i, 1);
+      updateEnrollThumbs();
+    });
+
+    wrap.appendChild(img);
+    wrap.appendChild(rm);
+    $enrollThumbs.appendChild(wrap);
   });
-  if (enrollFiles.length > 8) {
-    const sp = document.createElement('span');
-    sp.className = 'ls-thumb-count';
-    sp.textContent = `+${enrollFiles.length - 8} more`;
-    $enrollThumbs.appendChild(sp);
+
+  // Update hint text with live count
+  const n = enrollFiles.length;
+  if (n === 0) {
+    $enrollHint.textContent = 'JPG, PNG, WEBP · Click again to add more · Max 5 photos';
+  } else if (n < MAX_ENROLL) {
+    $enrollHint.textContent = `${n}/${MAX_ENROLL} photos added · Click to add more`;
+    $enrollHint.style.color = '#5CBF7A';
+  } else {
+    $enrollHint.textContent = `${MAX_ENROLL}/${MAX_ENROLL} photos · limit reached`;
+    $enrollHint.style.color = '#C9B97A';
   }
 }
 
-$enrollFile.addEventListener('change', e => {
-  enrollFiles = [...e.target.files];
+// Accumulate new files into enrollFiles (up to MAX_ENROLL)
+function addEnrollFiles(newFiles) {
+  const images = [...newFiles].filter(f => f.type.startsWith('image/'));
+  const remaining = MAX_ENROLL - enrollFiles.length;
+  if (remaining <= 0) {
+    showToast(`Max ${MAX_ENROLL} photos reached. Remove one to add another.`, 'bad');
+    return;
+  }
+  const toAdd = images.slice(0, remaining);
+  if (images.length > remaining) {
+    showToast(`Added ${toAdd.length} photo${toAdd.length > 1 ? 's' : ''} (limit: ${MAX_ENROLL} max).`, '');
+  }
+  enrollFiles = [...enrollFiles, ...toAdd];
+  // Reset file input so same file can be re-selected
+  $enrollFile.value = '';
   updateEnrollThumbs();
+}
+
+$enrollFile.addEventListener('change', e => {
+  addEnrollFiles(e.target.files);
 });
 
 ['dragover','dragleave','drop'].forEach(evt => {
@@ -3485,8 +3533,7 @@ $enrollFile.addEventListener('change', e => {
     if (evt === 'dragleave') $enrollDrop.classList.remove('drag-over');
     if (evt === 'drop') {
       $enrollDrop.classList.remove('drag-over');
-      enrollFiles = [...e.dataTransfer.files].filter(f => f.type.startsWith('image/'));
-      updateEnrollThumbs();
+      addEnrollFiles(e.dataTransfer.files);
     }
   });
 });
@@ -3494,9 +3541,12 @@ $enrollFile.addEventListener('change', e => {
 document.getElementById('enroll-clear-btn').addEventListener('click', () => {
   enrollFiles = [];
   $enrollThumbs.innerHTML = '';
+  $enrollFile.value = '';
   document.getElementById('enroll-name').value = '';
   $enrollResult.innerHTML = '';
   $enrollPH.style.display = 'flex';
+  $enrollHint.textContent = 'JPG, PNG, WEBP · Click again to add more · Max 5 photos';
+  $enrollHint.style.color = '';
 });
 
 $enrollBtn.addEventListener('click', async () => {
