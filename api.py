@@ -213,6 +213,7 @@ def list_database():
 
 @app.route("/api/enroll", methods=["POST"])
 def enroll():
+    global _database          # declared here so Python allows use anywhere in this function
     data  = request.get_json(silent=True) or {}
     name  = data.get("name", "").strip().replace(" ", "_")
     imgs  = data.get("images", [])          # list of base64 strings
@@ -295,7 +296,6 @@ def enroll():
 
     # ── Atomic read-modify-write under lock ───────────────────────────────────
     with _db_lock:
-        global _database
         _database = _load_db_from_disk()      # get the freshest state
         _database[name] = agg
         _save_db_to_disk(_database)           # persist immediately
