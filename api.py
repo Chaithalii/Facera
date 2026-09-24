@@ -251,6 +251,33 @@ def enroll():
     agg = agg / (np.linalg.norm(agg) + 1e-10)
     agg = agg.astype(np.float32)
 
+    # ── Duplicate check: compare against every enrolled person ────────────────
+    dup_threshold = cfg.SIMILARITY_THRESHOLD   # reuse same threshold
+    with _db_lock:
+        current_db = dict(_database)           # snapshot (read-only)
+
+    best_match_name  = None
+    best_match_score = -1.0
+    for existing_name, existing_emb in current_db.items():
+        if existing_name == name:              # same name → update, not duplicate
+            continue
+        sim = float(np.dot(agg, existing_emb))
+        if sim > best_match_score:
+            best_match_score = sim
+            best_match_name  = existing_name
+
+    if best_match_name and best_match_score >= dup_threshold:
+        return jsonify({
+            "duplicate":        True,
+            "matched_name":     best_match_name,
+            "similarity":       round(best_match_score, 5),
+            "error": (
+                f"This face is already enrolled as '{best_match_name}' "
+                f"(similarity {best_match_score:.3f} ≥ threshold {dup_threshold}). "
+                f"Enrolling under a different name is not allowed."
+            ),
+        }), 409
+
     # ── Atomic read-modify-write under lock (fast — just dict + pickle) ───────
     with _db_lock:
         global _database

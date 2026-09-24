@@ -2190,6 +2190,15 @@
           </div>
         </div>
 
+        <!-- Webcam button for identify -->
+        <button class="wc-trigger-btn" id="identify-webcam-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M3 9a2 2 0 0 1 2-2h.93a2 2 0 0 0 1.664-.89l.812-1.22A2 2 0 0 1 10.07 4h3.86a2 2 0 0 1 1.664.89l.812 1.22A2 2 0 0 0 18.07 7H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+          </svg>
+          Use Webcam to Identify
+        </button>
+
         <div class="ls-threshold-row">
           <label>Threshold θ</label>
           <input type="range" id="id-thresh-slider" min="0" max="1" step="0.01" value="0.35" />
@@ -2211,7 +2220,7 @@
             <circle cx="25" cy="16" r="3" stroke="currentColor" stroke-width="1.5"/>
             <path d="M13 26 Q20 32 27 26" stroke="currentColor" stroke-width="1.5"/>
           </svg>
-          <p>Upload a photo and click <strong>Identify Faces</strong><br>to run ArcFace recognition.</p>
+          <p>Upload a photo or use webcam and click <strong>Identify Faces</strong><br>to run ArcFace recognition.</p>
         </div>
         <div id="identify-result"></div>
       </div>
@@ -2240,7 +2249,7 @@
 <div id="webcam-modal">
   <div class="wc-box">
     <div class="wc-header">
-      <span class="wc-title">Live Webcam Capture · Enroll from Camera</span>
+      <span class="wc-title" id="wc-modal-title">Live Webcam Capture · Enroll from Camera</span>
       <button class="wc-close" id="wc-close-btn">&times;</button>
     </div>
 
@@ -3569,7 +3578,22 @@ $enrollBtn.addEventListener('click', async () => {
     });
     const d = await res.json();
 
-    if (d.error) {
+    if (d.duplicate) {
+      // ── Duplicate face detected ──────────────────────────────
+      $enrollResult.innerHTML = `
+        <div class="enroll-error" style="border-left:3px solid #C9B97A;background:rgba(201,185,122,0.08);">
+          <div style="font-size:1.3rem;margin-bottom:0.4rem;">⚠️ Already Enrolled</div>
+          <p>This face is already in the database as <strong>${d.matched_name.replace(/_/g,' ')}</strong>.</p>
+          <p style="font-family:var(--mono);font-size:0.75rem;opacity:0.7;margin-top:0.4rem;">
+            similarity: ${d.similarity.toFixed(4)} · threshold: ${d.similarity >= 0.35 ? '≥ 0.35' : ''}
+          </p>
+          <p style="font-size:0.78rem;margin-top:0.6rem;opacity:0.8;">
+            Enrolling the same face under a different name is not allowed.<br>
+            To update embeddings, use the same name as already enrolled.
+          </p>
+        </div>`;
+      showToast(`Already enrolled as ${d.matched_name.replace(/_/g,' ')}.`, 'bad');
+    } else if (d.error) {
       $enrollResult.innerHTML = `<div class="enroll-error"><p>❌ ${d.error}</p></div>`;
       showToast(d.error, 'bad');
     } else {
@@ -3598,7 +3622,10 @@ $enrollBtn.addEventListener('click', async () => {
 // ─────────────────────────────────────────────────────────────
 //  IDENTIFY
 // ─────────────────────────────────────────────────────────────
+//  IDENTIFY
+// ─────────────────────────────────────────────────────────────
 let identifyFile = null;
+let identifyB64  = null;   // holds webcam frame b64 directly
 let idThreshold  = 0.35;
 
 const $idDrop     = document.getElementById('identify-drop');
@@ -3619,10 +3646,20 @@ $idThresh.addEventListener('input', () => {
 function setIdentifyFile(file) {
   if (!file || !file.type.startsWith('image/')) return;
   identifyFile = file;
+  identifyB64  = null;
   $idPreview.src = URL.createObjectURL(file);
   $idPrevWrap.style.display = 'block';
   document.getElementById('id-drop-icon').textContent = '✓';
   document.getElementById('id-drop-text').textContent = file.name;
+}
+
+function setIdentifyB64(b64, label) {
+  identifyFile = null;
+  identifyB64  = b64;
+  $idPreview.src = b64;
+  $idPrevWrap.style.display = 'block';
+  document.getElementById('id-drop-icon').textContent = '✓';
+  document.getElementById('id-drop-text').textContent = label || 'Webcam snapshot';
 }
 
 $idFile.addEventListener('change', e => setIdentifyFile(e.target.files[0]));
@@ -3642,6 +3679,7 @@ $idFile.addEventListener('change', e => setIdentifyFile(e.target.files[0]));
 
 document.getElementById('id-clear-btn').addEventListener('click', () => {
   identifyFile = null;
+  identifyB64  = null;
   $idPreview.src = '';
   $idPrevWrap.style.display = 'none';
   $idResult.innerHTML = '';
@@ -3650,16 +3688,13 @@ document.getElementById('id-clear-btn').addEventListener('click', () => {
   document.getElementById('id-drop-text').textContent = 'Drop a photo here or click to browse';
 });
 
-$idBtn.addEventListener('click', async () => {
-  if (!identifyFile) { showToast('Upload a photo first.', 'bad'); return; }
-
+async function runIdentify(b64) {
   $idBtn.disabled = true;
   $idBtn.innerHTML = '<span class="ls-spinner"></span>Running ArcFace…';
   $idPH.style.display = 'none';
   $idResult.innerHTML = '';
 
   try {
-    const b64 = await fileToBase64(identifyFile);
     const res = await fetch(API + '/identify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -3668,20 +3703,31 @@ $idBtn.addEventListener('click', async () => {
     });
     const d = await res.json();
 
-    if (d.error) {
+    if (d.error && d.error.includes('No persons enrolled')) {
+      // ── Empty DB state ────────────────────────────────────────
+      $idResult.innerHTML = `
+        <div class="id-no-faces" style="gap:0.5rem;">
+          <div style="font-size:2rem;">🗃️</div>
+          <div style="font-weight:600;">No one enrolled yet</div>
+          <div style="font-size:0.8rem;opacity:0.6;max-width:260px;text-align:center;">
+            Go to the <strong>Enroll</strong> tab and add at least one person before identifying.
+          </div>
+        </div>`;
+      showToast('Enroll someone first before identifying.', 'bad');
+    } else if (d.error) {
       $idResult.innerHTML = `<div class="enroll-error"><p>❌ ${d.error}</p></div>`;
       showToast(d.error, 'bad');
     } else if (d.face_count === 0) {
+      // ── No face detected ─────────────────────────────────────
       $idResult.innerHTML = `<div class="id-no-faces">
         <div style="font-size:1.5rem;margin-bottom:0.5rem;">○</div>
         <div>No faces detected in this image.</div>
         <div style="margin-top:0.4rem;font-size:0.72rem;opacity:0.6;">Ensure the face is clearly visible, well-lit, and at least 30 px wide.</div>
       </div>`;
     } else {
-      // Build result HTML
+      // ── Results ───────────────────────────────────────────────
       let html = '<div class="id-result-wrap">';
 
-      // Annotated image from backend
       if (d.annotated_image) {
         html += `<img class="id-annotated-img" src="data:image/jpeg;base64,${d.annotated_image}" alt="Result" />`;
       }
@@ -3693,7 +3739,6 @@ $idBtn.addEventListener('click', async () => {
         const verdictCls = face.is_known ? 'ok' : 'unk';
         const verdictText = face.is_known ? '✓ Identified' : '✗ Unknown';
 
-        // Score bars
         const scores = Object.entries(face.all_scores);
         const maxScore = Math.max(...scores.map(([,v]) => v));
         let barsHtml = scores.map(([pname, score]) => {
@@ -3740,6 +3785,12 @@ $idBtn.addEventListener('click', async () => {
 
   $idBtn.disabled = false;
   $idBtn.textContent = 'Identify Faces';
+}
+
+$idBtn.addEventListener('click', async () => {
+  if (!identifyFile && !identifyB64) { showToast('Upload a photo or use webcam first.', 'bad'); return; }
+  const b64 = identifyB64 || await fileToBase64(identifyFile);
+  await runIdentify(b64);
 });
 
 // ─────────────────────────────────────────────────────────────
@@ -3966,6 +4017,44 @@ $enrollBtn.addEventListener('click', async () => {
 $enrollFile.addEventListener('change', () => {
   delete document.getElementById('enroll-drop').dataset.source;
   wcFrames = [];
+});
+
+// ── Webcam mode: 'enroll' or 'identify' ────────────────────────
+let wcMode = 'enroll';
+
+// Override enroll-webcam-btn to set mode
+document.getElementById('enroll-webcam-btn').addEventListener('click', async () => {
+  wcMode = 'enroll';
+  document.getElementById('wc-modal-title').textContent = 'Live Webcam Capture · Enroll from Camera';
+  $wcDone.textContent = 'Use These Frames';
+  openWebcam();
+});
+
+// Wire identify-webcam-btn
+document.getElementById('identify-webcam-btn').addEventListener('click', async () => {
+  wcMode = 'identify';
+  document.getElementById('wc-modal-title').textContent = 'Live Webcam Capture · Identify from Camera';
+  $wcDone.textContent = 'Identify This Frame';
+  wcFrames = [];
+  $wcThumbs.innerHTML = '';
+  $wcCount.textContent = '0 / 1';
+  $wcStatus.textContent = 'Point your camera at the face and click Capture.';
+  $wcDone.disabled = true;
+  openWebcam();
+});
+
+// Override "Use These Frames" / "Identify This Frame" button
+$wcDone.addEventListener('click', () => {
+  if (wcMode === 'identify') {
+    if (!wcFrames.length) { showToast('Capture a frame first.', 'bad'); return; }
+    const b64 = wcFrames[wcFrames.length - 1];
+    setIdentifyB64(b64, `Webcam · ${new Date().toLocaleTimeString()}`);
+    showToast('Frame captured. Click Identify Faces.', 'good');
+    closeWebcam();
+    document.querySelector('[data-tab="identify"]').click();
+  } else {
+    useWebcamFrames();
+  }
 });
 
 /* ─── 8. PAGE LOADER ─── */
