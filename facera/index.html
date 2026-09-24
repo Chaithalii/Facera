@@ -3982,7 +3982,21 @@ $enrollBtn.addEventListener('click', async () => {
         signal: AbortSignal.timeout(60000),
       });
       const d = await res.json();
-      if (d.error) {
+      if (d.duplicate) {
+        $enrollResult.innerHTML = `
+          <div class="enroll-error" style="border-left:3px solid #C9B97A;background:rgba(201,185,122,0.08);">
+            <div style="font-size:1.3rem;margin-bottom:0.4rem;">⚠️ Already Enrolled</div>
+            <p>This face is already in the database as <strong>${d.matched_name.replace(/_/g,' ')}</strong>.</p>
+            <p style="font-family:var(--mono);font-size:0.75rem;opacity:0.7;margin-top:0.4rem;">
+              similarity: ${d.similarity.toFixed(4)} · threshold: ≥ 0.30
+            </p>
+            <p style="font-size:0.78rem;margin-top:0.6rem;opacity:0.8;">
+              Enrolling the same face under a different name is not allowed.<br>
+              To update embeddings, use the same name as already enrolled.
+            </p>
+          </div>`;
+        showToast(`Already enrolled as ${d.matched_name.replace(/_/g,' ')}.`, 'bad');
+      } else if (d.error) {
         $enrollResult.innerHTML = `<div class="enroll-error"><p>&#10060; ${d.error}</p></div>`;
         showToast(d.error, 'bad');
       } else {
@@ -3998,7 +4012,6 @@ $enrollBtn.addEventListener('click', async () => {
           </div>`;
         showToast(`${d.name} enrolled from webcam.`, 'good');
         $bcount.textContent = d.total_enrolled;
-        // Clear webcam source flag
         delete document.getElementById('enroll-drop').dataset.source;
         wcFrames = [];
       }

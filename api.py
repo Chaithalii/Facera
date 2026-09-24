@@ -251,39 +251,55 @@ def enroll():
     agg = agg / (np.linalg.norm(agg) + 1e-10)
     agg = agg.astype(np.float32)
 
-    # ── Duplicate check: compare against every enrolled person ────────────────
-    dup_threshold = cfg.SIMILARITY_THRESHOLD   # reuse same threshold
+    # ── Duplicate check: always read the freshest DB from DISK ────────────────
+    # We intentionally reload from disk here (same as the write does) so the
+    # check is never fooled by a stale in-memory snapshot.
+    # Use a lower threshold (0.30) than identification so same-person photos
+    # are always caught even if different angles/lighting.
+    DUP_THRESHOLD = 0.30
     with _db_lock:
-        current_db = dict(_database)           # snapshot (read-only)
+        check_db = _load_db_from_disk()     # freshest on-disk state
+        if not check_db:                    # if disk is empty, fall back to memory
+            check_db = dict(_database)
+
+    log.info("Duplicate check: comparing '%s' against %d existing persons (threshold=%.2f)",
+             name, len(check_db), DUP_THRESHOLD)
 
     best_match_name  = None
     best_match_score = -1.0
-    for existing_name, existing_emb in current_db.items():
-        if existing_name == name:              # same name → update, not duplicate
+    for existing_name, existing_emb in check_db.items():
+        if existing_name == name:              # same name → update allowed, not duplicate
             continue
         sim = float(np.dot(agg, existing_emb))
+        log.info("  similarity('%s', '%s') = %.5f", name, existing_name, sim)
         if sim > best_match_score:
             best_match_score = sim
             best_match_name  = existing_name
 
-    if best_match_name and best_match_score >= dup_threshold:
+    log.info("Best match: '%s' @ %.5f (threshold=%.2f)",
+             best_match_name, best_match_score, DUP_THRESHOLD)
+
+    if best_match_name and best_match_score >= DUP_THRESHOLD:
+        log.info("DUPLICATE BLOCKED: '%s' matches '%s' (%.5f >= %.2f)",
+                 name, best_match_name, best_match_score, DUP_THRESHOLD)
         return jsonify({
-            "duplicate":        True,
-            "matched_name":     best_match_name,
-            "similarity":       round(best_match_score, 5),
+            "duplicate":    True,
+            "matched_name": best_match_name,
+            "similarity":   round(best_match_score, 5),
             "error": (
                 f"This face is already enrolled as '{best_match_name}' "
-                f"(similarity {best_match_score:.3f} ≥ threshold {dup_threshold}). "
-                f"Enrolling under a different name is not allowed."
+                f"(similarity {best_match_score:.3f} \u2265 {DUP_THRESHOLD}). "
+                f"Enrolling the same face under a different name is not allowed."
             ),
         }), 409
 
-    # ── Atomic read-modify-write under lock (fast — just dict + pickle) ───────
+    # ── Atomic read-modify-write under lock ───────────────────────────────────
     with _db_lock:
         global _database
         _database = _load_db_from_disk()      # get the freshest state
         _database[name] = agg
         _save_db_to_disk(_database)           # persist immediately
+
     # ─────────────────────────────────────────────────────────────────────────
 
     # Save source images to disk (outside lock — non-critical)
